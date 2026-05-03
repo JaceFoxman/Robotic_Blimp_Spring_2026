@@ -1,0 +1,136 @@
+MPLINK 5.09, LINKER
+Linker Map File - Created Wed Apr 29 14:26:16 2026
+
+                                 Section Info
+                  Section       Type    Address   Location Size(Bytes)
+                ---------  ---------  ---------  ---------  ---------
+                   .org_0       code   0x000000    program   0x000002
+                   .cinit    romdata   0x000001    program   0x000004
+                   .org_1       code   0x000004    program   0x0000ca
+                 I2C_CODE       code   0x000069    program   0x00016e
+          URC_RX_HANDLERS       code   0x000120    program   0x000110
+               SETUP_CODE       code   0x0001a8    program   0x000102
+.config_8007_BUILD/DEFAULT/PRODUCTION/UNV_MAS       code   0x008007    program   0x000002
+.config_8008_BUILD/DEFAULT/PRODUCTION/UNV_MAS       code   0x008008    program   0x000002
+
+
+
+                              Program Memory Usage 
+                               Start         End      
+                           ---------   ---------      
+                            0x000000    0x000002      
+                            0x000004    0x000228      
+                            0x008007    0x008008      
+            554 out of 16647 program addresses used, program memory utilization is 3%
+
+
+
+                              Symbols - Sorted by Name
+                     Name    Address   Location    Storage File                     
+                ---------  ---------  ---------  --------- ---------                
+         ADDRESS_SENT_R_1   0x0000d3    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+         ADDRESS_SENT_R_2   0x0000f2    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+           ADDRESS_SENT_W   0x000091    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+            ADDR_VERIFIED   0x00014f    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                 BAD_COND   0x000110    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+            BAD_STOP_DONE   0x000112    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+              BUTTON_DATA   0x00019a    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_1   0x00013b    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_2   0x000146    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_3   0x000154    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_4   0x00015b    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_5   0x000162    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_6   0x000169    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                CHECK_R_W   0x00011c    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+          CONNECT_TIMEOUT   0x00002c    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+    CONTROLLER_DISCONNECT   0x000030    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+              DATA_1_SENT   0x00009c    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+            DATA_1_SENT_R   0x0000e0    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+              DATA_2_SENT   0x0000a7    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+              DATA_3_SENT   0x0000b2    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+              DATA_4_SENT   0x0000bd    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+               DECODE_URC   0x000172    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+           DECODE_URC_END   0x0001a2    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                GOOD_STOP   0x0000c4    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+           GOOD_STOP_DONE   0x0000c6    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+       HANDSHAKE_VERIFIED   0x000143    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                 I2C_IDLE   0x000116    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                 I2C_READ   0x0000ca    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+         I2C_SETUP_MASTER   0x000069    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                I2C_WRITE   0x000088    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+               INITIALIZE   0x0001a8    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_PIC_SetUp.inc
+                INTERRUPT   0x00000e    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+          JOYSTICK_DATA_1   0x000180    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+          JOYSTICK_DATA_2   0x00018d    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                     MAIN   0x00005e    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+                 MAIN_END   0x000068    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+                NACK_DONE   0x000103    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+         READ_STOP_DONE_2   0x000109    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                 SEND_I2C   0x000031    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+             SEND_I2C_END   0x00005b    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+                    SETUP   0x000005    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+        START_READ_DONE_1   0x0000cd    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+        START_READ_DONE_2   0x0000ea    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+         START_WRITE_DONE   0x00008b    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+           TMR2_INTERRUPT   0x000018    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+       TMR2_INTERRUPT_END   0x00002f    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+                  UART_RX   0x000120    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+              UART_RX_END   0x000171    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+               UPDATE_I2C   0x000027    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+
+
+
+                              Symbols - Sorted by Address
+                     Name    Address   Location    Storage File                     
+                ---------  ---------  ---------  --------- ---------                
+                    SETUP   0x000005    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+                INTERRUPT   0x00000e    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+           TMR2_INTERRUPT   0x000018    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+               UPDATE_I2C   0x000027    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+          CONNECT_TIMEOUT   0x00002c    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+       TMR2_INTERRUPT_END   0x00002f    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+    CONTROLLER_DISCONNECT   0x000030    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+                 SEND_I2C   0x000031    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+             SEND_I2C_END   0x00005b    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+                     MAIN   0x00005e    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+                 MAIN_END   0x000068    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_Main.asm
+         I2C_SETUP_MASTER   0x000069    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                I2C_WRITE   0x000088    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+         START_WRITE_DONE   0x00008b    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+           ADDRESS_SENT_W   0x000091    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+              DATA_1_SENT   0x00009c    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+              DATA_2_SENT   0x0000a7    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+              DATA_3_SENT   0x0000b2    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+              DATA_4_SENT   0x0000bd    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                GOOD_STOP   0x0000c4    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+           GOOD_STOP_DONE   0x0000c6    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                 I2C_READ   0x0000ca    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+        START_READ_DONE_1   0x0000cd    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+         ADDRESS_SENT_R_1   0x0000d3    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+            DATA_1_SENT_R   0x0000e0    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+        START_READ_DONE_2   0x0000ea    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+         ADDRESS_SENT_R_2   0x0000f2    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                NACK_DONE   0x000103    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+         READ_STOP_DONE_2   0x000109    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                 BAD_COND   0x000110    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+            BAD_STOP_DONE   0x000112    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                 I2C_IDLE   0x000116    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                CHECK_R_W   0x00011c    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_I2C_SetUp.inc
+                  UART_RX   0x000120    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_1   0x00013b    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+       HANDSHAKE_VERIFIED   0x000143    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_2   0x000146    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+            ADDR_VERIFIED   0x00014f    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_3   0x000154    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_4   0x00015b    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_5   0x000162    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+                   BYTE_6   0x000169    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+              UART_RX_END   0x000171    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+               DECODE_URC   0x000172    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+          JOYSTICK_DATA_1   0x000180    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+          JOYSTICK_DATA_2   0x00018d    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+              BUTTON_DATA   0x00019a    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+           DECODE_URC_END   0x0001a2    program     static C:\Users\JaceF\Projects\Universal_RX.X\URC_RX_Handler.inc
+               INITIALIZE   0x0001a8    program     static C:\Users\JaceF\Projects\Universal_RX.X\Unv_Master_PIC_SetUp.inc
+
+

@@ -1,0 +1,106 @@
+Message[301] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\P16F1788.INC 34 : MESSAGE: (Processor-header file mismatch.  Verify selected processor.)
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 82 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 86 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 90 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 94 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 97 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 100 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 116 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 120 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 124 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 127 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 130 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 133 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 137 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 141 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 145 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 153 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 156 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 159 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 162 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 166 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 169 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 173 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 177 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 180 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 183 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 186 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 190 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 193 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 197 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 213 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 217 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 220 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 224 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 229 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 233 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 237 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 241 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_PIC_SETUP.INC 244 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 113 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[305] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 121 : Using default destination of 1 (file).
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 128 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[305] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 136 : Using default destination of 1 (file).
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 143 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[305] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 147 : Using default destination of 1 (file).
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 152 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[305] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 156 : Using default destination of 1 (file).
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 161 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[305] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 165 : Using default destination of 1 (file).
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\URC_RX_HANDLER.INC 170 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 81 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 82 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 85 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 88 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 91 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 94 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 97 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 106 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 108 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 113 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 116 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 120 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 125 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 128 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 132 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 137 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 140 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 144 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 149 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 152 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 156 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 161 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 164 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 168 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 172 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 174 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 186 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 188 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 193 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 196 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 200 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 207 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 210 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 214 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 218 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 220 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 227 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 230 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 234 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 237 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 241 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 244 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 245 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 247 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 250 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 252 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 254 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 257 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 267 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 269 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[305] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 280 : Using default destination of 1 (file).
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 280 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_I2C_SETUP.INC 286 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_MAIN.ASM 63 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[305] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_MAIN.ASM 106 : Using default destination of 1 (file).
+Message[305] C:\USERS\JACEF\PROJECTS\UNIVERSAL_RX.X\UNV_MASTER_MAIN.ASM 119 : Using default destination of 1 (file).

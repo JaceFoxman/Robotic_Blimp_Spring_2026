@@ -1,0 +1,3312 @@
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE  1
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00001 ;****************************************************************************
+                      00002 ;                                                                           *
+                      00003 ;           File Name:  Unv_TDrive_Slave_Main.asm                           *
+                      00004 ;           Date: 1/28/25                                                   *
+                      00005 ;           File Version: 1                                                 *
+                      00006 ;           Author:    Zac Christensen                                      *
+                      00007 ;           Company:   Idaho State University; RCET                         *
+                      00008 ;           Description: Slave Board for the Universal Control System       *
+                      00009 ;                           "Tank Drive" Board.                             *
+                      00010 ;                                                                           *
+                      00011 ;****************************************************************************
+                      00012 ;                                                                           *
+                      00013 ;           Revision History:                                               *
+                      00014 ;     1.Added I2C Receive Interrupt Routine; 1/29/25                        *
+                      00015 ;     2.Added "working" I2C Receive Routine; 2/10/25                        *
+                      00016 ;     3.Added Timer 2 Interrupt Routines; 2/11/25                           *
+                      00017 ;     4.Moved interrupt flag clearing into routines; 2/12/25                *
+                      00018 ;     5.Added Timer 1 Interrupts for I2C COM Timeout; 2/12/25               *
+                      00019 ;     6.Added COM Timeout Functionality;  2/13/25                           *
+                      00020 ;     7.Added Set Motor State Routine; 2/13/25                              *
+                      00021 ;     8.Added Determine Motor State and Joystick Thresholds; 2/18/25        *
+                      00022 ;     9.Slow I2C COM Timeout For More Peripherals; 3/3/25                   *
+                      00023 ;     10.Add Comments and Update register names for Template; 4/30/25       *
+                      00024 ;     _.                                                                    *
+                      00025 ;                                                                           *
+                      00026 ;****************************************************************************
+                      00027     
+                      00028 ;****************************************************************************************
+                      00029 ;****                        CURRENT_DRIVE_STATE Bit Map                              ***
+                      00030 ;****************************************************************************************
+                      00031 ;****  Current Drive State is Set up so that the lower Nibble(Bits 0-3) indicate the  ***
+                      00032 ;***    right motor Function and the upper nibble(Bits 4-7) indicate the left motor   ***
+                      00033 ;***    function.  Looking at the nibbles individually, a decimal 0=Stop, 1=Forward,  ***
+                      00034 ;***    and 2=Reverse.                                                                ***
+                      00035 ;****************************************************************************************
+                      00036 ;***_________________________________________________________________________________ ***
+                      00037 ;***| Hex Value  |      Mode Name         |            Motor Function               | ***
+                      00038 ;***|    0x00    |      All Stop          | Right Motor Stop, Left Motor Stop       | ***
+                      00039 ;***|    0x11    |    Drive Forward       | Right Motor Forward, Left Motor Forward | ***
+                      00040 ;***|    0x22    |    Drive Reverse       | Right Motor Reverse, Left Motor Reverse | ***       
+                      00041 ;***|    0x10    |  Turn Right Forward    | Right Motor Stop, Left Motor Forward    | ***    
+                      00042 ;***|    0x02    |  Turn Right Reverse    | Right Motor Reverse, Left Motor Stop    | ***
+                      00043 ;***|    0x12    | Zero-Point Turn Right  | Right Motor Reverse, Left Motor Forward | ***    
+                      00044 ;***|    0x01    |  Turn Left Forward     | Right Motor Forward, Left Motor Stop    | ***    
+                      00045 ;***|    0x20    |  Turn Left Reverse     | Right Motor Stop, Left Motor Reverse    | ***
+                      00046 ;***|    0x21    | Zero-Point Turn Left   | Right Motor Forward, Left Motor Reverse | ***
+                      00047 ;***|    0x__    | Unrecognized; All Stop | Right Motor Stop, Left Motor Stop       | ***
+                      00048 ;***_________________________________________________________________________________ ***
+                      00049 ;****************************************************************************************
+                      00050     
+                      00051 #INCLUDE "p16f1788.inc"                                 ;Processor specific variable definitions
+                      00001         LIST
+                      00002 
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE  2
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00003 ;==========================================================================
+                      00004 ; Build date : Oct 24 2019
+                      00005 ;  MPASM PIC16F1788 processor include
+                      00006 ; 
+                      00007 ;  (c) Copyright 1999-2019 Microchip Technology, All rights reserved
+                      00008 ;==========================================================================
+                      00009 
+                      03024         LIST
+                      00052 #INCLUDE "Unv_TDrive_Slave_PIC_SetUp.inc"               ;URC TDrive Slave Board PIC Set Up
+                      00001 ;****************************************************************************
+                      00002 ;                                                                           *
+                      00003 ;           File Name: Unv_TDrive_Slave_PIC_SetUp.INC                       *
+                      00004 ;           Date:   1/28/25                                                 *
+                      00005 ;           File Version: 1                                                 *
+                      00006 ;           Author:    Zac Christensen                                      *
+                      00007 ;           Company:   Idaho State University; RCET                         *
+                      00008 ;           Description:  Firmware Setup for PIC16f1788 to be used as       *
+                      00009 ;                           Tank Drive Slave with Universal Control System. *
+                      00010 ;                                                                           *
+                      00011 ;****************************************************************************
+                      00012 ;                                                                           *
+                      00013 ;           Revision History:                                               *
+                      00014 ;       1.Added register for saving controller status; 1/28/25              *
+                      00015 ;       2.Added MSSP interrupts for I2C COM; 1/30/25                        *
+                      00016 ;       3.Added register for motor output signals; 2/11/25                  *
+                      00017 ;       4.Added Timer 2 functionality and interrupts; 2/11/25               *
+                      00018 ;       5.Added Timer 1 functionality and interrupts; 2/12/25               *
+                      00019 ;       6.Added Current Drive State Registser; 2/13/25                      *
+                      00020 ;       7.Added Joystick Upper and Lower Thresholds; 2/18/25                *
+                      00021 ;       8.                                                                  *
+                      00022 ;       9.                                                                  *
+                      00023 ;       10.                                                                 *
+                      00024 ;                                                                           *
+                      00025 ;****************************************************************************
+                      00026     
+                      00027 ;******************************************             
+                      00028 ;Define Constants
+                      00029 ;******************************************
+                      00030 #Define         BAUD            D'100'                  ;Desired Baud Rate in Kbps for I2C
+                      00031 #Define         FOSC            D'16000'                ;Oscillator Clock in KHz This must be filled
+                      00032     
+                      00033 ;******************************************             
+                      00034 ;Define Variable Registers
+                      00035 ;******************************************
+  00000020            00036 I2C_TIMEOUT_COUNT       EQU     0X20        ;Register to Slow I2C COM Timeout
+                      00037                         
+  00000022            00038 JOY1_UD                 EQU     0X22        ;Register to Save Joystick 1 Up-Down Data
+  00000023            00039 JOY1_LR                 EQU     0X23        ;Register to Save Joystick 1 Left-Right Data
+  00000024            00040 JOY2_UD                 EQU     0X24        ;Register to Save Joystick 2 Up-Down Data
+  00000025            00041 JOY2_LR                 EQU     0X25        ;Register to Save Joystick 2 Left-Right Data
+  00000026            00042 T20MS_COUNT_2           EQU     0X26        ;Register to Track Output Period (20mS)
+  00000027            00043 T20MS_COUNT_1           EQU     0x27        ;Register to Track Output Period (20mS)         
+  00000028            00044 R_MOTOR_COUNT           EQU     0X28        ;Register to Track Current Right Motor Output On-Time(this o
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE  3
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                            ne is decremented)
+  00000029            00045 L_MOTOR_COUNT           EQU     0X29        ;Register to Track Current Left Motor Output On-Time(this on
+                            e is decremented)
+  0000002A            00046 R_MOTOR_STATUS          EQU     0X2A        ;Register to Track Right Motor Mode (This status is used to 
+                            reset R_MOTOR_COUNT)
+  0000002B            00047 L_MOTOR_STATUS          EQU     0X2B        ;Register to Track Left Motor Mode (This status is used to r
+                            eset L_MOTOR_COUNT)
+  0000002C            00048 FORWARD_COUNT           EQU     0X2C        ;Register to Save 2.5mS On-Time Count
+  0000002D            00049 STOP_COUNT              EQU     0x2D        ;Register to Save 1.5mS On-Time Count
+  0000002E            00050 REVERSE_COUNT           EQU     0x2E        ;Register to Save 0.5mS On-Time Count
+  0000002F            00051 CURRENT_DRIVE_STATE     EQU     0X2F        ;Register to Motor Output State Bits: 0=Stop, 1=Forward, 2=R
+                            everse, 3=Turn Right, 4=Turn Left
+  00000030            00052 UPPER_THRESHOLD         EQU     0X30        ;Register used to compare Joystick Value to Determine Forwar
+                            d/Left
+  00000031            00053 LOWER_THRESHOLD         EQU     0X31        ;Register used to compare Joystick Value to Determine Back/R
+                            ight
+  00000032            00054 ACTUATOR_MOTOR_COUNT    EQU     0x32        ;Register to Track Current Actuator Motor Output On-Time(thi
+                            s one is decremented)
+  00000033            00055 ACTUATOR_MOTOR_STATUS   EQU     0x33        ;Register to Track Actuator Motor Mode (This status is used 
+                            to reset ACTUATOR_MOTOR_COUNT)
+                      00056 ;******************************************             
+                      00057 ;Start of Setup File Code
+                      00058 ;******************************************
+                      00059 SETUP_CODE CODE
+                      00060  
+0000                  00061 INITIALIZE
+                      00062 ;*** SFR SETUP **********
+0000   0020           00063     BANKSEL     I2C_TIMEOUT_COUNT
+0001   3002           00064     MOVLW       H'02'
+0002   00A0           00065     MOVWF       I2C_TIMEOUT_COUNT
+                      00066     
+0003   0020           00067     BANKSEL     JOY1_UD
+0004   3080           00068     MOVLW       D'128'
+0005   00A2           00069     MOVWF       JOY1_UD
+0006   0020           00070     BANKSEL     JOY1_LR
+0007   3080           00071     MOVLW       D'128'
+0008   00A3           00072     MOVWF       JOY1_LR
+0009   0020           00073     BANKSEL     JOY2_UD
+000A   3080           00074     MOVLW       D'128'
+000B   00A4           00075     MOVWF       JOY2_UD
+000C   0020           00076     BANKSEL     JOY2_LR
+000D   3080           00077     MOVLW       D'128'
+000E   00A5           00078     MOVWF       JOY2_LR                 ;Begin With all Joysticks at "Center" 
+                      00079     
+000F   0020           00080     BANKSEL     T20MS_COUNT_2
+0010   30C8           00081     MOVLW       D'200'                  ;200 Measured: 20.78mS
+0011   00A6           00082     MOVWF       T20MS_COUNT_2           ;Save Count for 20mS (200*0.05mS=10mS)
+0012   0020           00083     BANKSEL     T20MS_COUNT_1
+0013   30C8           00084     MOVLW       D'200'                  ;200 Measured: 20.78mS
+0014   00A7           00085     MOVWF       T20MS_COUNT_1           ;Save Count for 20mS (200*0.05mS=10mS)
+0015   0020           00086     BANKSEL     FORWARD_COUNT           
+0016   3028           00087     MOVLW       D'40'                   ;25 Measured: 2.578mS
+0017   00AC           00088     MOVWF       FORWARD_COUNT           ;Save Count for 2.5mS(25*0.05mS=2.5mS)
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE  4
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0018   0020           00089     BANKSEL     STOP_COUNT
+0019   301D           00090     MOVLW       D'29'                   ;14 Measured: 1.458mS; 15 Measured: 1.538mS
+001A   00AD           00091     MOVWF       STOP_COUNT              ;Save Count for 1.5mS(15*0.05mS=1.5mS)
+001B   0020           00092     BANKSEL     REVERSE_COUNT
+001C   3014           00093     MOVLW       D'20'                   ;5 Measured: 0.498mS
+001D   00AE           00094     MOVWF       REVERSE_COUNT           ;Save Count for 0.5mS(5*0.05mS=0.5mS)
+001E   0020           00095     BANKSEL     STOP_COUNT
+001F   082D           00096     MOVFW       STOP_COUNT
+0020   0020           00097     BANKSEL     ACTUATOR_MOTOR_STATUS
+0021   00B3           00098     MOVWF       ACTUATOR_MOTOR_STATUS
+0022   0020           00099     BANKSEL     R_MOTOR_STATUS
+0023   00AA           00100     MOVWF       R_MOTOR_STATUS
+0024   0020           00101     BANKSEL     L_MOTOR_STATUS
+0025   00AB           00102     MOVWF       L_MOTOR_STATUS
+0026   0020           00103     BANKSEL     ACTUATOR_MOTOR_COUNT
+0027   00B2           00104     MOVWF       ACTUATOR_MOTOR_COUNT
+0028   0020           00105     BANKSEL     R_MOTOR_COUNT
+0029   00A8           00106     MOVWF       R_MOTOR_COUNT
+002A   0020           00107     BANKSEL     L_MOTOR_COUNT
+002B   00A9           00108     MOVWF       L_MOTOR_COUNT           ;Begin with Both Left, Right, and Actuator Motors in Stop (1.5mS
+                            )
+                      00109     
+002C   0020           00110     BANKSEL     CURRENT_DRIVE_STATE
+002D   3000           00111     MOVLW       H'00'
+002E   00AF           00112     MOVWF       CURRENT_DRIVE_STATE     ;Begin in STOP mode
+                      00113     
+002F   0020           00114     BANKSEL     UPPER_THRESHOLD
+0030   30C8           00115     MOVLW       H'C8'
+0031   00B0           00116     MOVWF       UPPER_THRESHOLD
+0032   0020           00117     BANKSEL     LOWER_THRESHOLD
+0033   3028           00118     MOVLW       H'28'
+0034   00B1           00119     MOVWF       LOWER_THRESHOLD         ;Set Upper and lower thresholds to determine joystick Status
+                      00120     
+                      00121 ;***Oscillator Set up****
+0035   0021           00122     BANKSEL     OSCCON
+0036   3078           00123     MOVLW       H'78'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0037   0099           00124     MOVWF       OSCCON                  ;Set Internal Oscilator to 16Mhz
+                      00125 
+0038   002A           00126     BANKSEL     CLKRCON
+0039   3000           00127     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+003A   009A           00128     MOVWF       CLKRCON                 ;Disable Output CLock Reference
+                      00129  
+                      00130 ;*** SET OPTION_REG: ****
+003B   0021           00131     BANKSEL     OPTION_REG
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+003C   0195           00132     CLRF        OPTION_REG              ;Weak Pull Up Disabled, Interrupt Edge Selection, Timer Clock Se
+                            t-Up
+                      00133     
+                      00134 ;*** SET CCPXCON REG: **
+003D   0025           00135     BANKSEL     CCP1CON
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE  5
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+003E   0193           00136     CLRF        CCP1CON                 ;DISABLE PWM & CCP
+                      00137     
+003F   0025           00138     BANKSEL     CCP2CON
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0040   019A           00139     CLRF        CCP2CON
+                      00140     
+0041   0026           00141     BANKSEL     CCP3CON
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0042   0193           00142     CLRF        CCP3CON
+                      00143 ;*** TIMER 1 SETUP *****
+0043   0020           00144     BANKSEL     T1CON
+0044   3030           00145     MOVLW       H'30'
+0045   0098           00146     MOVWF       T1CON                   ;Use instruction clock (Fosc/4); 1:8 prescaler (wait on enable)
+                      00147     
+0046   0020           00148     BANKSEL     T1GCON
+0047   0199           00149     CLRF        T1GCON                  ;Gate always enabled
+                      00150     
+                      00151 ;*** TIMER 2 SETUP *****
+0048   0020           00152     BANKSEL     T2CON
+0049   3009           00153     MOVLW       H'09'                   ;Sets Prescaler to 1:4; Post Scaler to 1:2(wait on enable)
+004A   009C           00154     MOVWF       T2CON
+004B   0020           00155     BANKSEL     PR2             
+004C   3019           00156     MOVLW       D'25'                   ;Set PR2 count to 25 interrupt ever 0.05mS
+004D   009B           00157     MOVWF       PR2                     ;(((16M/4)^-1 * 4) * 25) * 2 = 0.05mS
+                      00158     
+                      00159 ;*** Alternate Pin Functions ****
+004E   0022           00160     BANKSEL     APFCON1
+004F   3041           00161     MOVLW       H'41'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0050   009D           00162     MOVWF       APFCON1                 ;Set Comm on Port C CCP on Port B
+                      00163     
+0051   0022           00164     BANKSEL     APFCON2
+0052   3001           00165     MOVLW       H'01'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0053   009C           00166     MOVWF       APFCON2                 ;Set Save/Select on Port A CCP3 on Port B
+                      00167     
+                      00168 ;*** PORT A SETUP ****
+0054   0023           00169     BANKSEL     ANSELA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0055   018C           00170     CLRF        ANSELA                  ;Disable Analog Input
+                      00171     
+0056   0024           00172     BANKSEL     WPUA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0057   018C           00173     CLRF        WPUA                    ;Disable Weak Pull Ups
+                      00174     
+0058   0025           00175     BANKSEL     ODCONA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0059   018C           00176     CLRF        ODCONA                  ;Disable Open Drain
+                      00177     
+005A   0026           00178     BANKSEL     SLRCONA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+005B   018C           00179     CLRF        SLRCONA                 ;Disable Slew Rate Limit
+                      00180     
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE  6
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+005C   0027           00181     BANKSEL     INLVLA
+005D   30FF           00182     MOVLW       H'FF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+005E   008C           00183     MOVWF       INLVLA                  ;Set Input Threshold Voltage to CMOS Levels
+                      00184     
+005F   0022           00185     BANKSEL     LATA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0060   018C           00186     CLRF        LATA                    ;Clear Input Latches
+                      00187     
+0061   0021           00188     BANKSEL     TRISA
+0062   3000           00189     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0063   008C           00190     MOVWF       TRISA                   ;SET Port A as Output
+                      00191     
+                      00192 ;*** PORT B SETUP **** 
+0064   0023           00193     BANKSEL     ANSELB
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0065   018D           00194     CLRF        ANSELB                  ;Disable Analog Input
+                      00195     
+0066   0024           00196     BANKSEL     WPUB
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0067   018D           00197     CLRF        WPUB                    ;Disable Weak Pull Ups
+                      00198     
+0068   0025           00199     BANKSEL     ODCONB
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0069   018D           00200     CLRF        ODCONB                  ;Disable Open Drain
+                      00201     
+006A   0026           00202     BANKSEL     SLRCONB
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+006B   018D           00203     CLRF        SLRCONB                 ;Disable Slew Rate Limit
+                      00204     
+006C   0027           00205     BANKSEL     INLVLB
+006D   30FF           00206     MOVLW       H'FF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+006E   008D           00207     MOVWF       INLVLB                  ;Set Input Threshold Voltage to CMOS Levels
+                      00208     
+006F   0022           00209     BANKSEL     LATB
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0070   018D           00210     CLRF        LATB                    ;Clear Input Latches
+                      00211     
+0071   0021           00212     BANKSEL     TRISB
+0072   3000           00213     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0073   008D           00214     MOVWF       TRISB                   ;SET Port B as Output
+                      00215     
+                      00216     
+                      00217 ;*** PORT C SETUP **** 
+0074   0023           00218     BANKSEL     ANSELC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0075   018E           00219     CLRF        ANSELC                  ;Disable Analog Input
+                      00220     
+0076   0024           00221     BANKSEL     WPUC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE  7
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0077   018E           00222     CLRF        WPUC                    ;Disable Weak Pull Ups
+                      00223     
+0078   0025           00224     BANKSEL     ODCONC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0079   018E           00225     CLRF        ODCONC                  ;Disable Open Drain
+                      00226     
+007A   0026           00227     BANKSEL     SLRCONC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+007B   018E           00228     CLRF        SLRCONC                 ;Disable Slew Rate Limit
+                      00229     
+007C   0027           00230     BANKSEL     INLVLC
+007D   30FF           00231     MOVLW       H'FF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+007E   008E           00232     MOVWF       INLVLC                  ;Set Input Threshold Voltage to CMOS Levels
+                      00233     
+007F   0022           00234     BANKSEL     LATC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0080   018E           00235     CLRF        LATC                    ;Clear Input Latches
+                      00236     
+0081   0021           00237     BANKSEL     TRISC
+0082   3000           00238     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0083   008E           00239     MOVWF       TRISC                   ;SET Port C as Output
+                      00240     
+                      00241 ;*** PORT E SETUP ****
+                      00242 ;28 Pin Package Does Not Have Port E
+                      00243     
+                      00244 ;*** Interrupt Set-Up : ****
+0084   0020           00245     BANKSEL     INTCON
+0085   3040           00246     MOVLW       H'40'                   ;Enable Peripheral Interrupts (Wait on Global)
+0086   008B           00247     MOVWF       INTCON
+                      00248     
+0087   0021           00249     BANKSEL     PIE1
+0088   300B           00250     MOVLW       H'0B'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0089   0091           00251     MOVWF       PIE1                    ;Enable MSSP, Timer 2, and Timer 1 Interrupts
+                      00252  
+008A   0021           00253     BANKSEL     PIE2
+008B   3000           00254     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+008C   0092           00255     MOVWF       PIE2                    ;Disable Interrupts
+                      00256     
+008D   0021           00257     BANKSEL     PIE3
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+008E   1213           00258     BCF         PIE3, 4                 ;Disable CCP3 Interrupt
+                      00259     
+008F   0021           00260     BANKSEL     PIE4
+0090   3000           00261     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0091   0094           00262     MOVWF       PIE4                    ;Disable Interrupts
+                      00263     
+0092   0008           00264     RETURN                              ;END OF SETUP ROUTINE
+                      00053 #INCLUDE "Unv_Slave_I2C_SetUp.inc"                      ;I2C Set Up and Read/Write Routines
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE  8
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00001 ;****************************************************************************
+                      00002 ;                                                                           *
+                      00003 ;           File Name: Unv_Slave_I2C_SetUp.INC                              *
+                      00004 ;           Date:   4/29/25                                                 *
+                      00005 ;           File Version: 1                                                 *
+                      00006 ;           Author:    Zac Christensen                                      *
+                      00007 ;           Company:   Idaho State University; RCET                         *
+                      00008 ;           Description:  I2C COM SetUp and functions for Universal         *
+                      00009 ;                           Control System Slave Board.                     *
+                      00010 ;                                                                           *
+                      00011 ;****************************************************************************
+                      00012 
+                      00013     
+  00000040            00014 ADDRESS_W               EQU     H'040'      ;Temp register for storing the peripheral address write (I2C
+                             Master)
+  00000041            00015 ADDRESS_R               EQU     H'041'      ;Temp register for storing the peripheral address read (I2C 
+                            Master)
+  00000042            00016 I2C_RX_TEMP_1           EQU     H'042'      ;Temp register for storing the first data byte received 
+  00000043            00017 I2C_RX_TEMP_2           EQU     H'043'      ;Temp register for storing the second data byte received
+  00000044            00018 I2C_RX_TEMP_3           EQU     H'044'      ;Temp register for storing the third data byte received
+  00000045            00019 I2C_RX_TEMP_4           EQU     H'045'      ;Temp register for storing the fourth data byte received
+  00000046            00020 I2C_RX_COUNTER          EQU     H'046'      ;Register to track which data byte was las received
+  00000047            00021 I2C_RX_COMPLETE         EQU     H'047'      ;Flag to Signal when full data packet has been received
+                      00022 
+                      00023     
+                      00024     
+                      00025 I2C_CODE    CODE
+                      00026         
+0000                  00027 I2C_SETUP_SLAVE
+                      00028 ;**************Slave SetUp**************************
+0000   0021           00029         BANKSEL     TRISC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0001   158E           00030         BSF         TRISC,3
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0002   160E           00031         BSF         TRISC,4                             ;Set SCL and SDA as inputs
+                      00032         ;***************************************************************************************
+                      00033         ;*** Set SSPADD for the desired Slave Address                                        ***
+                      00034         ;***************************************************************************************
+0003   0024           00035         BANKSEL     SSP1ADD
+0004   3010           00036         MOVLW       H'10'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0005   0092           00037         MOVWF       SSP1ADD                             ;Peripheral Address Read=0x21; Write=0x20
+                      00038         ;***************************************************************************************
+0006   0024           00039         BANKSEL     SSP1CON1
+0007   3036           00040         MOVLW       H'36'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0008   0095           00041         MOVWF       SSP1CON1                            ;Enable SDA and SCL Pins, Enable Clock, and Set 
+                            as 7 bit address Slave
+0009   0024           00042         BANKSEL     SSP1CON2
+000A   3009           00043         MOVLW       H'09'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+000B   0096           00044         MOVWF       SSP1CON2                            ;Disable General Call and Enable Receive and Clo
+                            ck Strechting
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE  9
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+000C   0024           00045         BANKSEL     SSP1CON3            
+000D   3020           00046         MOVLW       H'20'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+000E   0097           00047         MOVWF       SSP1CON3                            ;Disable Slave Interrupts, SDA Hold Time of 300n
+                            S, Auto Enable Address and Data Clock Stretching
+000F   0024           00048         BANKSEL     SSP1STAT
+0010   3040           00049         MOVLW       H'40'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0011   0094           00050         MOVWF       SSP1STAT                            ;Disable Slew Rate Control and flags
+0012   0020           00051         BANKSEL     I2C_RX_COUNTER
+0013   01C6           00052         CLRF        I2C_RX_COUNTER                      ;Begin at first Data Byte
+0014   0008           00053         RETURN
+                      00054         
+                      00055         
+                      00056 ;********************************************************************************************
+                      00057 ;*** I2C_RECEIVE Should be called each time an MSSP Interrupt Occurs.  This function will ***
+                      00058 ;*** Check which byte has been received from I2C and save them into temporary registers.  ***
+                      00059 ;*** Additionally, this routine sets the flag when a full data byte is received and       ***
+                      00060 ;*** clears the timer 1 counter registers used for I2C COM Timeout.                       ***
+                      00061 ;********************************************************************************************
+0015                  00062 I2C_RECEIVE
+0015   0024           00063         BANKSEL     SSP1CON1
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0016   1215           00064         BCF         SSP1CON1,4                          ;Hold Clock
+0017   0024           00065         BANKSEL     SSP1STAT
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0018   1A94           00066         BTFSC       SSP1STAT,5
+0019   2???           00067         GOTO        I2C_DATA_RX                         ;Check if last receive was data or address
+001A                  00068 ADDRESS_RX  
+001A   0024           00069         BANKSEL     SSP1BUF
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+001B   0811           00070         MOVFW       SSP1BUF                             ;Clear Address out of Buffer
+001C   0020           00071         BANKSEL     I2C_RX_COUNTER
+001D   01C6           00072         CLRF        I2C_RX_COUNTER                      ;Clear Data Received Counter
+001E   2???           00073         GOTO        I2C_RECEIVE_END
+001F                  00074 I2C_DATA_RX
+001F   0020           00075         BANKSEL     I2C_RX_COUNTER
+0020   3000           00076         MOVLW       H'00'
+0021   0246           00077         SUBWF       I2C_RX_COUNTER,0                    ;Subtract W from F (F-W).  Store in W
+0022   0020           00078         BANKSEL     STATUS
+0023   1903           00079         BTFSC       STATUS,2
+0024   2???           00080         GOTO        FIRST_DATA_BYTE                     ;Subtraction = 0.  Counter = 0
+0025   0020           00081         BANKSEL     I2C_RX_COUNTER
+0026   3001           00082         MOVLW       H'01'
+0027   0246           00083         SUBWF       I2C_RX_COUNTER,0                    ;Subtract W from F (F-W).  Store in W
+0028   0020           00084         BANKSEL     STATUS
+0029   1903           00085         BTFSC       STATUS,2
+002A   2???           00086         GOTO        SECOND_DATA_BYTE                    ;Subtraction = 0.  Counter = 1
+002B   0020           00087         BANKSEL     I2C_RX_COUNTER
+002C   3002           00088         MOVLW       H'02'
+002D   0246           00089         SUBWF       I2C_RX_COUNTER,0                    ;Subtract W from F (F-W).  Store in W
+002E   0020           00090         BANKSEL     STATUS
+002F   1903           00091         BTFSC       STATUS,2
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 10
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0030   2???           00092         GOTO        THIRD_DATA_BYTE                     ;Subtraction = 0.  Counter = 2
+0031   0020           00093         BANKSEL     I2C_RX_COUNTER
+0032   3003           00094         MOVLW       H'03'
+0033   0246           00095         SUBWF       I2C_RX_COUNTER,0                    ;Subtract W from F (F-W).  Store in W
+0034   0020           00096         BANKSEL     STATUS
+0035   1903           00097         BTFSC       STATUS,2
+0036   2???           00098         GOTO        FOURTH_DATA_BYTE                    ;Subtraction = 0.  Counter = 3
+0037   2???           00099         GOTO        I2C_RECEIVE_END                     ;Not Data 1,2,3, or 4 Exit Routine
+0038                  00100 FIRST_DATA_BYTE
+0038   0024           00101         BANKSEL     SSP1BUF
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0039   0811           00102         MOVFW       SSP1BUF
+003A   0020           00103         BANKSEL     I2C_RX_TEMP_1
+003B   00C2           00104         MOVWF       I2C_RX_TEMP_1                       ;Save First Data Byte into Temporary Register
+003C   2???           00105         GOTO        I2C_RECEIVE_DATA_END
+003D                  00106 SECOND_DATA_BYTE
+003D   0024           00107         BANKSEL     SSP1BUF
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+003E   0811           00108         MOVFW       SSP1BUF
+003F   0020           00109         BANKSEL     I2C_RX_TEMP_2
+0040   00C3           00110         MOVWF       I2C_RX_TEMP_2                       ;Save Second Data Byte into Temporary Register
+0041   2???           00111         GOTO        I2C_RECEIVE_DATA_END
+0042                  00112 THIRD_DATA_BYTE
+0042   0024           00113         BANKSEL     SSP1BUF
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0043   0811           00114         MOVFW       SSP1BUF
+0044   0020           00115         BANKSEL     I2C_RX_TEMP_3
+0045   00C4           00116         MOVWF       I2C_RX_TEMP_3                       ;Save Third Data Byte into Temporary Register
+0046   2???           00117         GOTO        I2C_RECEIVE_DATA_END
+0047                  00118 FOURTH_DATA_BYTE
+0047   0024           00119         BANKSEL     SSP1BUF
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0048   0811           00120         MOVFW       SSP1BUF
+0049   0020           00121         BANKSEL     I2C_RX_TEMP_4
+004A   00C5           00122         MOVWF       I2C_RX_TEMP_4                       ;Save Fourth Data Byte into Temporary Register
+004B   0020           00123         BANKSEL     I2C_RX_COMPLETE
+004C   1447           00124         BSF         I2C_RX_COMPLETE,0                   ;Set flag to indicate full data packet has been 
+                            received
+004D   0020           00125         BANKSEL     TMR1H
+004E   0197           00126         CLRF        TMR1H
+004F   0196           00127         CLRF        TMR1L                               ;Clear Timer 1 Count For I2C COM Timeout
+0050   2???           00128         GOTO        I2C_RECEIVE_DATA_END
+0051                  00129 I2C_RECEIVE_DATA_END
+0051   0020           00130         BANKSEL     I2C_RX_COUNTER
+Message[305]: Using default destination of 1 (file).
+0052   0AC6           00131         INCF        I2C_RX_COUNTER                      ;Increment Data Byte Counter to Save The next re
+                            ceived Byte 
+0053                  00132 I2C_RECEIVE_END
+0053   0024           00133         BANKSEL     SSP1CON1
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0054   1615           00134         BSF         SSP1CON1,4                          ;Re-enable Clock (stop clock strechting)
+0055   0020           00135         BANKSEL     PIR1    
+0056   1191           00136         BCF         PIR1,3                              ;Clear MSSP Interrupt Flag
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 11
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0057   0008           00137         RETURN
+                      00138         
+                      00054 ;LIST    P=16f1788                                      ;list directive to define processor
+                      00055 ;errorlevel -302,-207,-305,-206,-203                    ;suppress "not in bank 0" message,  Found label 
+                            after column 1,
+                      00056         
+                      00057 ;******************************************    
+                      00058 ;Configuration
+                      00059 ;******************************************
+                      00060     
+                      00061 ; CONFIG1
+                      00062 ; __config 0xC9E4
+8007   09E4           00063  __CONFIG _CONFIG1, _FOSC_INTOSC & _WDTE_OFF & _PWRTE_OFF & _MCLRE_ON & _CP_OFF & _CPD_OFF & _BOREN_OFF 
+                            & _CLKOUTEN_OFF & _IESO_OFF & _FCMEN_OFF
+                      00064 ; CONFIG2
+                      00065 ; __config 0xDFFF
+8008   1EFF           00066  __CONFIG _CONFIG2, _WRT_OFF & _VCAPEN_OFF & _PLLEN_OFF & _STVREN_ON & _BORV_LO & _LPBOR_OFF & _LVP_OFF
+                      00067 
+                      00068 ;******************************************             
+                      00069 ;Interrupt Vectors
+                      00070 ;******************************************
+                      00071     ORG H'00'                                   
+0000   2???           00072     GOTO SETUP                          ;RESET CONDITION GOTO SETUP
+                      00073     ORG H'04'
+0004   2???           00074     GOTO INTERRUPT                      ;Interrupt occur GOTO INTERRUPT
+                      00075     
+                      00076 ;******************************************
+                      00077 ;Setup Routine
+                      00078 ;******************************************
+0005                  00079 SETUP
+0005   2???           00080     CALL        INITIALIZE
+0006   2???           00081     CALL        I2C_SETUP_SLAVE
+                      00082     
+0007   0020           00083     BANKSEL     INTCON
+0008   178B           00084     BSF         INTCON,7            ;Enable Global Interrupts
+                      00085     
+0009   0020           00086     BANKSEL     T1CON
+000A   1418           00087     BSF         T1CON,0             ;Enable Timer 1 (I2C COM Timeout)
+                      00088     
+000B   0020           00089     BANKSEL     T2CON
+000C   151C           00090     BSF         T2CON,2             ;Enable Timer 2 (Interrupt Every 0.05mS)
+                      00091     
+000D   2???           00092     GOTO        MAIN
+                      00093     
+                      00094 ;******************************************
+                      00095 ;Interrupt Service Routine
+                      00096 ;******************************************
+000E                  00097 INTERRUPT    
+                      00098         ;Handles I2C receive and temporary data save functions
+000E   0020           00099         BANKSEL     PIR1
+000F   1991           00100         BTFSC       PIR1,3
+0010   2???           00101         CALL        I2C_RECEIVE     ;Test for MSSP Interrupt
+                      00102         
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 12
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00103         ;Handles loss of I2C connection
+0011   0020           00104         BANKSEL     PIR1
+0012   1811           00105         BTFSC       PIR1,0
+0013   2???           00106         CALL        I2C_COM_TIMEOUT ;Test for Timer 1 Interrupt
+                      00107         
+                      00108         ;Handles Servo-Type signal output Timing
+0014   0020           00109         BANKSEL     PIR1
+0015   1891           00110         BTFSC       PIR1,1
+0016   2???           00111         CALL        TMR2_INTERRUPT  ;Test for Timer 2 Interrupt
+                      00112         
+0017   0009           00113     RETFIE
+                      00114     
+                      00115 ;******************************************
+                      00116 ;Sub Routines
+                      00117 ;******************************************
+                      00118     
+                      00119 ;*****************************************************************************************************
+                      00120 ;*** TMR2_INTERRUPT Hanldles the Servo Signal Outputs.  Every 20mS All the outputs are set         ***
+                      00121 ;*** and their corresponding counters are reset to their on-time "status" count.                   ***
+                      00122 ;*** When 20mS has not passed, each output counter is decremented.  If the count reaches 0         ***
+                      00123 ;*** the output is cleared.  Outputs 1-8 are on Port A; Output 9 is PortC,0; Output 10 is PortC,5. ***
+                      00124 ;*** Right Motor is Output 1.  Left Motor is Output 2. Acutator Motor is Output 3.                 ***
+                      00125 ;*****************************************************************************************************
+0018                  00126 TMR2_INTERRUPT
+0018   0020           00127     BANKSEL     T20MS_COUNT_1
+0019   3000           00128     MOVLW       H'00'
+001A   0227           00129     SUBWF       T20MS_COUNT_1,0
+001B   0020           00130     BANKSEL     STATUS
+001C   1903           00131     BTFSC       STATUS,2
+001D   2???           00132     GOTO        FIRST_COUNT_ZERO
+Message[305]: Using default destination of 1 (file).
+001E   03A7           00133     DECF        T20MS_COUNT_1
+001F   2???           00134     GOTO        T20MS_NOT_PASSED
+0020                  00135 FIRST_COUNT_ZERO
+0020   0020           00136     BANKSEL     T20MS_COUNT_2
+Message[305]: Using default destination of 1 (file).
+0021   0BA6           00137     DECFSZ      T20MS_COUNT_2
+0022   2???           00138     GOTO        T20MS_NOT_PASSED
+0023   30C8           00139     MOVLW       D'200'
+0024   00A6           00140     MOVWF       T20MS_COUNT_2           ;Reset 20mS Counter
+0025   0020           00141     BANKSEL     T20MS_COUNT_1
+0026   00A7           00142     MOVWF       T20MS_COUNT_1
+0027   0020           00143     BANKSEL     R_MOTOR_STATUS
+0028   082A           00144     MOVFW       R_MOTOR_STATUS
+0029   0020           00145     BANKSEL     R_MOTOR_COUNT
+002A   00A8           00146     MOVWF       R_MOTOR_COUNT           ;Reset Right Motor Count
+002B   0020           00147     BANKSEL     L_MOTOR_STATUS
+002C   082B           00148     MOVFW       L_MOTOR_STATUS
+002D   0020           00149     BANKSEL     L_MOTOR_COUNT
+002E   00A9           00150     MOVWF       L_MOTOR_COUNT           ;Reset Left Motor Count
+002F   0020           00151     BANKSEL     ACTUATOR_MOTOR_STATUS
+0030   0833           00152     MOVFW       ACTUATOR_MOTOR_STATUS
+0031   0020           00153     BANKSEL     ACTUATOR_MOTOR_COUNT
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 13
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0032   00B2           00154     MOVWF       ACTUATOR_MOTOR_COUNT    ;Reset Actuator Motor Count
+0033   0020           00155     BANKSEL     PORTA
+0034   140C           00156     BSF         PORTA,0
+0035   148C           00157     BSF         PORTA,1             
+0036   150C           00158     BSF         PORTA,2                 ;Set Motor Outputs High(Right=Bit0; Left=Bit1; Head=Bit2)
+0037   2???           00159     GOTO        TMR2_INTERRUPT_END
+0038                  00160 T20MS_NOT_PASSED
+0038   0020           00161     BANKSEL     R_MOTOR_COUNT
+Message[305]: Using default destination of 1 (file).
+0039   0BA8           00162     DECFSZ      R_MOTOR_COUNT
+003A   2???           00163     GOTO        CHECK_L_MOTOR           ;Right Motor On Time Not Reached Check Left
+003B   0020           00164     BANKSEL     PORTA
+003C   100C           00165     BCF         PORTA,0                 ;Right Motor On Time Reached Clear Output
+003D                  00166 CHECK_L_MOTOR
+003D   0020           00167     BANKSEL     L_MOTOR_COUNT
+Message[305]: Using default destination of 1 (file).
+003E   0BA9           00168     DECFSZ      L_MOTOR_COUNT       
+003F   2???           00169     GOTO        CHECK_ACTUATOR_MOTOR    ;Left Motor On Time Not Reached Check Head
+0040   0020           00170     BANKSEL     PORTA
+0041   108C           00171     BCF         PORTA,1                 ;Left Motor On time Reached Clear OutPut
+0042                  00172 CHECK_ACTUATOR_MOTOR
+0042   0020           00173     BANKSEL     ACTUATOR_MOTOR_COUNT
+Message[305]: Using default destination of 1 (file).
+0043   0BB2           00174     DECFSZ      ACTUATOR_MOTOR_COUNT        
+0044   2???           00175     GOTO        TMR2_INTERRUPT_END      ;Left Motor On Time Not Reached Check Actuator
+0045   0020           00176     BANKSEL     PORTA
+0046   110C           00177     BCF         PORTA,2                 ;Actuator Motor On time Reached Clear OutPut
+0047                  00178 TMR2_INTERRUPT_END  
+0047   0020           00179     BANKSEL     PIR1
+0048   1091           00180     BCF         PIR1,1                  ;Clear Timer 2 Interrupt Flag
+0049   0008           00181     RETURN
+                      00182     
+                      00183 ;**********************************************************************************************
+                      00184 ;*** I2C_COM_TIMEOUT occurs during a timer 1 overflow. Every time a full I2C data packet is ***
+                      00185 ;***  received timer 1 counters are cleared. This Function will occur if no I2C data is     ***
+                      00186 ;***  received.  This Should be used to return outputs to safe state if I2C COM is lost.    ***
+                      00187 ;***  This template sets all motors into a Stop.                                            ***
+                      00188 ;********************************************************************************************** 
+004A                  00189 I2C_COM_TIMEOUT
+                      00190     ;******Occurs every 130mS*******
+004A   0020           00191     BANKSEL     I2C_TIMEOUT_COUNT
+Message[305]: Using default destination of 1 (file).
+004B   0BA0           00192     DECFSZ      I2C_TIMEOUT_COUNT                   ;Slow I2C COM Timeout Count 
+004C   2???           00193     GOTO        I2C_COM_TIMEOUT_END
+004D   3002           00194     MOVLW       H'02'
+004E   00A0           00195     MOVWF       I2C_TIMEOUT_COUNT                   ;Reset I2C COM Timeout Count
+004F   0020           00196     BANKSEL     STOP_COUNT
+0050   082D           00197     MOVFW       STOP_COUNT
+0051   0020           00198     BANKSEL     ACTUATOR_MOTOR_STATUS
+0052   00B3           00199     MOVWF       ACTUATOR_MOTOR_STATUS
+0053   0020           00200     BANKSEL     R_MOTOR_STATUS
+0054   00AA           00201     MOVWF       R_MOTOR_STATUS
+0055   0020           00202     BANKSEL     L_MOTOR_STATUS
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 14
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0056   00AB           00203     MOVWF       L_MOTOR_STATUS                      ;Timeout Occured.  Stop Motors
+0057                  00204 I2C_COM_TIMEOUT_END
+0057   0020           00205     BANKSEL     PIR1
+0058   1011           00206     BCF         PIR1,0                              ;Clear Timer 1 Interrupt Flag       
+0059   0008           00207     RETURN
+                      00208     
+                      00209 ;****************************************************************************************************
+                      00210 ;*** UPDATE_DRIVE_STATUS will run every time a full 4 byte I2C Packet is received.  This function ***
+                      00211 ;*** will save the I2C Data out of temorary registsers, check joysticks against thresholdS, and   ***
+                      00212 ;*** update output signals accordingly.                                                           ***
+                      00213 ;****************************************************************************************************   
+                             
+005A                  00214 UPDATE_DRIVE_STATUS
+005A   2???           00215     CALL        SAVE_I2C_DATA               ;Save temporary RX Data into registers
+005B   2???           00216     CALL        DETERMINE_DRIVE_STATE       ;Check Joystick Data and Determine Motor Function
+005C   2???           00217     CALL        SET_DRIVE_STATE             ;Check CURRENT_DRIVE_STATE and update motor output counts
+005D   2???           00218     CALL        DETERMINE_ACTUATOR_STATE    ;Check Joystick Data and Set Actuator Motor Signal Counts
+005E   0020           00219     BANKSEL     I2C_RX_COMPLETE
+005F   01C7           00220     CLRF        I2C_RX_COMPLETE             ;Clear I2C data packet complete flag
+0060   0008           00221     RETURN
+                      00222    
+                      00223 ;*************************************************************************************************
+                      00224 ;*** SAVE_I2C_DATA is needed to convert the temporary I2C save registers into general          ***
+                      00225 ;*** purpose registers.  This should correlate with the data sent from the master.             ***
+                      00226 ;*** This Template assumes motors will be controlled from joystick 1 and 2.                    ***
+                      00227 ;*************************************************************************************************
+0061                  00228 SAVE_I2C_DATA
+0061   0020           00229     BANKSEL     I2C_RX_TEMP_1
+0062   0842           00230     MOVFW       I2C_RX_TEMP_1
+0063   0020           00231     BANKSEL     JOY1_UD
+0064   00A2           00232     MOVWF       JOY1_UD
+0065   0020           00233     BANKSEL     I2C_RX_TEMP_2
+0066   0843           00234     MOVFW       I2C_RX_TEMP_2
+0067   0020           00235     BANKSEL     JOY1_LR 
+0068   00A3           00236     MOVWF       JOY1_LR
+0069   0020           00237     BANKSEL     I2C_RX_TEMP_3
+006A   0844           00238     MOVFW       I2C_RX_TEMP_3
+006B   0020           00239     BANKSEL     JOY2_UD
+006C   00A4           00240     MOVWF       JOY2_UD
+006D   0020           00241     BANKSEL     I2C_RX_TEMP_4
+006E   0845           00242     MOVFW       I2C_RX_TEMP_4
+006F   0020           00243     BANKSEL     JOY2_LR
+0070   00A5           00244     MOVWF       JOY2_LR
+0071   0008           00245     RETURN
+                      00246    
+                      00247 ;******************************************************************************************************
+                      00248 ;*** DETERMINE_DRIVE_STATE will run every time a full 4 byte I2C Packet is received.  This function ***
+                      00249 ;***  Will compare joysticks to threshholds and set the register CURRENT_DRIVE_STATE to indicate    ***
+                      00250 ;***   the desired drive mode.  Joystick 2 is compared for Right Motor.  Joystick 1 is compared for ***
+                      00251 ;***   Left Motor.  See Comments above for Current Drive State Bit Map                              ***
+                      00252 ;****************************************************************************************************** 
+0072                  00253 DETERMINE_DRIVE_STATE
+0072   0020           00254     BANKSEL     CURRENT_DRIVE_STATE
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 15
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0073   01AF           00255     CLRF        CURRENT_DRIVE_STATE         ;Clear any Previous State (put into stop mode)
+                      00256 ;Check the joystick 2 for thresholds above or below.  if niether stop motor    
+0074                  00257 CHECK_RIGHT_MOTOR   
+0074   0020           00258     BANKSEL     UPPER_THRESHOLD
+0075   0830           00259     MOVFW       UPPER_THRESHOLD
+0076   0020           00260     BANKSEL     JOY2_UD
+0077   0224           00261     SUBWF       JOY2_UD,0               ;Subtract Upper Threshold from Joystick Value (Stored in W)
+0078   0020           00262     BANKSEL     STATUS                  ;JOY2_UD - UPPER_THRESHOLD
+0079   1803           00263     BTFSC       STATUS,0
+007A   2???           00264     GOTO        RIGHT_MOTOR_FORWARD     ;Result is Positive Joystick is above Threshold
+007B   0020           00265     BANKSEL     LOWER_THRESHOLD
+007C   0831           00266     MOVFW       LOWER_THRESHOLD
+007D   0020           00267     BANKSEL     JOY2_UD
+007E   0224           00268     SUBWF       JOY2_UD,0               ;Subtract Lower Threshold from Joystick Value (Stored in W)
+007F   0020           00269     BANKSEL     STATUS                  ;JOY2_UD - LOWER_THRESHOLD
+0080   1C03           00270     BTFSS       STATUS,0
+0081   2???           00271     GOTO        RIGHT_MOTOR_REVERSE     ;Result is Negative Joystick is below Threshold
+0082   2???           00272     GOTO        RIGHT_MOTOR_STOP        ;Joystick is Neither above or below thresholds
+                      00273 ;Check the joystick 1 for thresholds above or below.  if niether stop motor    
+0083                  00274 CHECK_LEFT_MOTOR    
+0083   0020           00275     BANKSEL     UPPER_THRESHOLD
+0084   0830           00276     MOVFW       UPPER_THRESHOLD
+0085   0020           00277     BANKSEL     JOY1_UD
+0086   0222           00278     SUBWF       JOY1_UD,0               ;Subtract Upper Threshold from Joystick Value (Stored in W)
+0087   0020           00279     BANKSEL     STATUS                  ;JOY1_UD - UPPER_THRESHOLD
+0088   1803           00280     BTFSC       STATUS,0
+0089   2???           00281     GOTO        LEFT_MOTOR_FORWARD      ;Result is Positive Joystick is above Threshold
+008A   0020           00282     BANKSEL     LOWER_THRESHOLD
+008B   0831           00283     MOVFW       LOWER_THRESHOLD
+008C   0020           00284     BANKSEL     JOY1_UD
+008D   0222           00285     SUBWF       JOY1_UD,0               ;Subtract Lower Threshold from Joystick Value (Stored in W)
+008E   0020           00286     BANKSEL     STATUS                  ;JOY1_UD - LOWER_THRESHOLD
+008F   1C03           00287     BTFSS       STATUS,0
+0090   2???           00288     GOTO        LEFT_MOTOR_REVERSE      ;Result is Negative Joystick is below Threshold
+0091   2???           00289     GOTO        LEFT_MOTOR_STOP         ;Joystick is Neither above or below thresholds    
+                      00290 ;Set Different States for Right Motor Before Checking Joystick 1 Threshold (CURRENT_DRIVE_STATE, Bits 0-
+                            3)
+0092                  00291 RIGHT_MOTOR_FORWARD
+0092   0020           00292     BANKSEL     CURRENT_DRIVE_STATE
+0093   142F           00293     BSF         CURRENT_DRIVE_STATE,0       ;Set Drive State Right Motor Forward (0x_1)
+0094   2???           00294     GOTO        CHECK_LEFT_MOTOR
+0095                  00295 RIGHT_MOTOR_REVERSE
+0095   0020           00296     BANKSEL     CURRENT_DRIVE_STATE
+0096   14AF           00297     BSF         CURRENT_DRIVE_STATE,1       ;Set Drive State Right Motor Reverse (0x_2)
+0097   2???           00298     GOTO        CHECK_LEFT_MOTOR
+0098                  00299 RIGHT_MOTOR_STOP
+0098   0020           00300     BANKSEL     CURRENT_DRIVE_STATE
+0099   102F           00301     BCF         CURRENT_DRIVE_STATE,0
+009A   10AF           00302     BCF         CURRENT_DRIVE_STATE,1
+009B   112F           00303     BCF         CURRENT_DRIVE_STATE,2
+009C   11AF           00304     BCF         CURRENT_DRIVE_STATE,3       ;Set Drive State Right Motor Stop (0x_0)
+009D   2???           00305     GOTO        CHECK_LEFT_MOTOR
+                      00306 ;Set Different States for Left Motor (CURRENT_DRIVE_STATE, Bits 4-7)
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 16
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+009E                  00307 LEFT_MOTOR_FORWARD
+009E   0020           00308     BANKSEL     CURRENT_DRIVE_STATE
+009F   162F           00309     BSF         CURRENT_DRIVE_STATE,4       ;Set Drive State Left Motor Forward (0x1_)
+00A0   2???           00310     GOTO        DETERMINE_DRIVE_STATE_END
+00A1                  00311 LEFT_MOTOR_REVERSE
+00A1   0020           00312     BANKSEL     CURRENT_DRIVE_STATE
+00A2   16AF           00313     BSF         CURRENT_DRIVE_STATE,5       ;Set Drive State Left Motor Reverse (0x2_)    
+00A3   2???           00314     GOTO        DETERMINE_DRIVE_STATE_END
+00A4                  00315 LEFT_MOTOR_STOP
+00A4   0020           00316     BANKSEL     CURRENT_DRIVE_STATE
+00A5   122F           00317     BCF         CURRENT_DRIVE_STATE,4
+00A6   12AF           00318     BCF         CURRENT_DRIVE_STATE,5
+00A7   132F           00319     BCF         CURRENT_DRIVE_STATE,6
+00A8   13AF           00320     BCF         CURRENT_DRIVE_STATE,7       ;Set Drive State Left Motor Stop (0x0_)
+00A9                  00321 DETERMINE_DRIVE_STATE_END
+00A9   0008           00322     RETURN
+                      00323    
+                      00324 ;*******************************************************************************************************
+                            ***
+                      00325 ;*** SET_DRIVE_STATE will run every time a full 4 byte I2C Packet is received.  This function will      
+                            ***
+                      00326 ;***   Inspect the status of CURRENT_DRIVE_STATE to determine motor function.  It will then update      
+                            ***
+                      00327 ;***    the outputs through setting Right and Left Motor Status Counts. See CURRENT_DRIVE_STATE bit map 
+                            ***
+                      00328 ;*******************************************************************************************************
+                            *** 
+00AA                  00329 SET_DRIVE_STATE
+                      00330     ;Check CURRENT_DRIVE_STATE to determine drive mode.  
+00AA   0020           00331     BANKSEL     CURRENT_DRIVE_STATE
+00AB   3000           00332     MOVLW       H'00'
+00AC   022F           00333     SUBWF       CURRENT_DRIVE_STATE,0
+00AD   0020           00334     BANKSEL     STATUS
+00AE   1903           00335     BTFSC       STATUS,2
+00AF   2???           00336     GOTO        BOTH_STOP                   ;Current Mode is Stop
+00B0   0020           00337     BANKSEL     CURRENT_DRIVE_STATE
+00B1   3011           00338     MOVLW       H'11'
+00B2   022F           00339     SUBWF       CURRENT_DRIVE_STATE,0
+00B3   0020           00340     BANKSEL     STATUS
+00B4   1903           00341     BTFSC       STATUS,2
+00B5   2???           00342     GOTO        BOTH_FORWARD                ;Current Mode is Drive Forward
+00B6   0020           00343     BANKSEL     CURRENT_DRIVE_STATE
+00B7   3022           00344     MOVLW       H'22'
+00B8   022F           00345     SUBWF       CURRENT_DRIVE_STATE,0
+00B9   0020           00346     BANKSEL     STATUS
+00BA   1903           00347     BTFSC       STATUS,2
+00BB   2???           00348     GOTO        BOTH_REVERSE                ;Current Mode is Drive Reverse
+00BC   0020           00349     BANKSEL     CURRENT_DRIVE_STATE
+00BD   3010           00350     MOVLW       H'10'
+00BE   022F           00351     SUBWF       CURRENT_DRIVE_STATE,0
+00BF   0020           00352     BANKSEL     STATUS
+00C0   1903           00353     BTFSC       STATUS,2
+00C1   2???           00354     GOTO        TURN_RIGHT_F                ;Current Mode is Turn Right Forward
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 17
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+00C2   0020           00355     BANKSEL     CURRENT_DRIVE_STATE
+00C3   3001           00356     MOVLW       H'01'
+00C4   022F           00357     SUBWF       CURRENT_DRIVE_STATE,0
+00C5   0020           00358     BANKSEL     STATUS
+00C6   1903           00359     BTFSC       STATUS,2
+00C7   2???           00360     GOTO        TURN_LEFT_F                 ;Current Mode is Turn Left Forward
+00C8   0020           00361     BANKSEL     CURRENT_DRIVE_STATE
+00C9   3012           00362     MOVLW       H'12'
+00CA   022F           00363     SUBWF       CURRENT_DRIVE_STATE,0
+00CB   0020           00364     BANKSEL     STATUS
+00CC   1903           00365     BTFSC       STATUS,2
+00CD   2???           00366     GOTO        Z_P_TURN_RIGHT              ;Current Mode is Zero Point Turn Right
+00CE   0020           00367     BANKSEL     CURRENT_DRIVE_STATE
+00CF   3021           00368     MOVLW       H'21'
+00D0   022F           00369     SUBWF       CURRENT_DRIVE_STATE,0
+00D1   0020           00370     BANKSEL     STATUS
+00D2   1903           00371     BTFSC       STATUS,2
+00D3   2???           00372     GOTO        Z_P_TURN_LEFT               ;Current Mode is Zero Point Turn Left
+00D4   0020           00373     BANKSEL     CURRENT_DRIVE_STATE
+00D5   3002           00374     MOVLW       H'02'
+00D6   022F           00375     SUBWF       CURRENT_DRIVE_STATE,0
+00D7   0020           00376     BANKSEL     STATUS
+00D8   1903           00377     BTFSC       STATUS,2
+00D9   2???           00378     GOTO        TURN_RIGHT_R                ;Current Mode is Turn Right Reverse
+00DA   0020           00379     BANKSEL     CURRENT_DRIVE_STATE
+00DB   3020           00380     MOVLW       H'20'
+00DC   022F           00381     SUBWF       CURRENT_DRIVE_STATE,0
+00DD   0020           00382     BANKSEL     STATUS
+00DE   1903           00383     BTFSC       STATUS,2
+00DF   2???           00384     GOTO        TURN_LEFT_R                 ;Current Mode is Turn Left Reverse
+00E0   2???           00385     GOTO        BOTH_STOP                   ;If Current Mode Unknown Falls into Both Stop
+                      00386 ;Mode determined.  Set Output Status Counts    
+00E1                  00387 BOTH_STOP ;Right and Left Motors put into Stop.
+00E1   0020           00388     BANKSEL     STOP_COUNT
+00E2   082D           00389     MOVFW       STOP_COUNT
+00E3   0020           00390     BANKSEL     R_MOTOR_STATUS
+00E4   00AA           00391     MOVWF       R_MOTOR_STATUS
+00E5   0020           00392     BANKSEL     L_MOTOR_STATUS
+00E6   00AB           00393     MOVWF       L_MOTOR_STATUS              ;Stop Both Motors (1.5ms On Time)
+00E7   2???           00394     GOTO        SET_DRIVE_STATE_END
+00E8                  00395 BOTH_FORWARD ;Right and Left Motors put into Forward.
+00E8   0020           00396     BANKSEL     FORWARD_COUNT
+00E9   082C           00397     MOVFW       FORWARD_COUNT
+00EA   0020           00398     BANKSEL     R_MOTOR_STATUS
+00EB   00AA           00399     MOVWF       R_MOTOR_STATUS
+00EC   0020           00400     BANKSEL     L_MOTOR_STATUS
+00ED   00AB           00401     MOVWF       L_MOTOR_STATUS              ;Forward Both Motors (2.5ms On Time)
+00EE   2???           00402     GOTO        SET_DRIVE_STATE_END
+00EF                  00403 BOTH_REVERSE ;Right and Left Motors put into Reverse.
+00EF   0020           00404     BANKSEL     REVERSE_COUNT
+00F0   082E           00405     MOVFW       REVERSE_COUNT
+00F1   0020           00406     BANKSEL     R_MOTOR_STATUS
+00F2   00AA           00407     MOVWF       R_MOTOR_STATUS
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 18
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+00F3   0020           00408     BANKSEL     L_MOTOR_STATUS
+00F4   00AB           00409     MOVWF       L_MOTOR_STATUS              ;Reverse Both Motors (0.5ms On Time)    
+00F5   2???           00410     GOTO        SET_DRIVE_STATE_END
+00F6                  00411 Z_P_TURN_RIGHT ;Zero-Point Right Turn.  Right Motor Reverse.  Left Motor Forward.
+00F6   0020           00412     BANKSEL     FORWARD_COUNT
+00F7   082C           00413     MOVFW       FORWARD_COUNT
+00F8   0020           00414     BANKSEL     L_MOTOR_STATUS
+00F9   00AB           00415     MOVWF       L_MOTOR_STATUS              ;Forward Left Motor (2.5ms On Time)
+00FA   0020           00416     BANKSEL     REVERSE_COUNT
+00FB   082E           00417     MOVFW       REVERSE_COUNT
+00FC   0020           00418     BANKSEL     R_MOTOR_STATUS
+00FD   00AA           00419     MOVWF       R_MOTOR_STATUS              ;Reverse Right Motor (0.5mS On Time)
+00FE   2???           00420     GOTO        SET_DRIVE_STATE_END
+00FF                  00421 Z_P_TURN_LEFT ;Zero-Point Left Turn.  Right Motor Forward.  Left Motor Reverse.
+00FF   0020           00422     BANKSEL     FORWARD_COUNT
+0100   082C           00423     MOVFW       FORWARD_COUNT
+0101   0020           00424     BANKSEL     R_MOTOR_STATUS
+0102   00AA           00425     MOVWF       R_MOTOR_STATUS              ;Forward Right Motor (2.5mS On Time)
+0103   0020           00426     BANKSEL     REVERSE_COUNT
+0104   082E           00427     MOVFW       REVERSE_COUNT
+0105   0020           00428     BANKSEL     L_MOTOR_STATUS
+0106   00AB           00429     MOVWF       L_MOTOR_STATUS              ;Reverse Left Motor (0.5mS On Time)
+0107   2???           00430     GOTO        SET_DRIVE_STATE_END
+0108                  00431 TURN_RIGHT_F ;Turn Right Through Forward Motion.  Right Motor Stop.  Left Motor Forward
+0108   0020           00432     BANKSEL     STOP_COUNT
+0109   082D           00433     MOVFW       STOP_COUNT
+010A   0020           00434     BANKSEL     R_MOTOR_STATUS
+010B   00AA           00435     MOVWF       R_MOTOR_STATUS              ;Stop Right Motor (1.5mS On Time)
+010C   0020           00436     BANKSEL     FORWARD_COUNT
+010D   082C           00437     MOVFW       FORWARD_COUNT
+010E   0020           00438     BANKSEL     L_MOTOR_STATUS
+010F   00AB           00439     MOVWF       L_MOTOR_STATUS              ;Forward Left Motor (2.5mS On Time)
+0110   2???           00440     GOTO        SET_DRIVE_STATE_END
+0111                  00441 TURN_LEFT_F ;Turn Left Through Forward Motion.  Right Motor Forward.  Left Motor Stop  
+0111   0020           00442     BANKSEL     STOP_COUNT
+0112   082D           00443     MOVFW       STOP_COUNT
+0113   0020           00444     BANKSEL     L_MOTOR_STATUS
+0114   00AB           00445     MOVWF       L_MOTOR_STATUS              ;Stop Left Motor (1.5mS On Time)
+0115   0020           00446     BANKSEL     FORWARD_COUNT
+0116   082C           00447     MOVFW       FORWARD_COUNT
+0117   0020           00448     BANKSEL     R_MOTOR_STATUS
+0118   00AA           00449     MOVWF       R_MOTOR_STATUS              ;Forward Right Motor (2.5mS On Time)
+0119   2???           00450     GOTO        SET_DRIVE_STATE_END
+011A                  00451 TURN_RIGHT_R ;Turn Right Through Reverse Motion.  Right Motor Reverse.  Left Motor Stop
+011A   0020           00452     BANKSEL     STOP_COUNT
+011B   082D           00453     MOVFW       STOP_COUNT
+011C   0020           00454     BANKSEL     L_MOTOR_STATUS
+011D   00AB           00455     MOVWF       L_MOTOR_STATUS              ;Stop Left Motor (1.5mS On Time)
+011E   0020           00456     BANKSEL     REVERSE_COUNT
+011F   082E           00457     MOVFW       REVERSE_COUNT
+0120   0020           00458     BANKSEL     R_MOTOR_STATUS
+0121   00AA           00459     MOVWF       R_MOTOR_STATUS              ;Reverse Right Motor (0.5mS On Time)
+0122   2???           00460     GOTO        SET_DRIVE_STATE_END
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 19
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0123                  00461 TURN_LEFT_R ;Turn Left Through Reverse Motion.  Right Motor Stop.  Left Motor Reverse
+0123   0020           00462     BANKSEL     STOP_COUNT
+0124   082D           00463     MOVFW       STOP_COUNT
+0125   0020           00464     BANKSEL     R_MOTOR_STATUS
+0126   00AA           00465     MOVWF       R_MOTOR_STATUS              ;Stop Right Motor (1.5mS On Time)
+0127   0020           00466     BANKSEL     REVERSE_COUNT
+0128   082E           00467     MOVFW       REVERSE_COUNT
+0129   0020           00468     BANKSEL     L_MOTOR_STATUS
+012A   00AB           00469     MOVWF       L_MOTOR_STATUS              ;Reverse Left Motor (0.5mS On Time)
+012B                  00470 SET_DRIVE_STATE_END
+012B   0008           00471     RETURN
+                      00472    
+                      00473 ;*******************************************************************************************************
+                            **
+                      00474 ;*** DETERMINE_ACUTATOR_STATE will run every time a full 4 byte I2C Packet is received.  This function *
+                            **
+                      00475 ;***  Will compare joystick to threshholds and set the actuator output status count accoridingly.      *
+                            **
+                      00476 ;***   This template uses joystick 2 left and right action as an example.  If Joystick 2 is above the  *
+                            **
+                      00477 ;***   threshhold actuator motor is moves forward, below the threshold actuator motor moves reverse.   *
+                            **
+                      00478 ;***   If it is neither above or below, actuator motor is set to stop.                                 *
+                            **
+                      00479 ;*******************************************************************************************************
+                            ** 
+012C                  00480 DETERMINE_ACTUATOR_STATE
+012C   0020           00481     BANKSEL     UPPER_THRESHOLD
+012D   0830           00482     MOVFW       UPPER_THRESHOLD
+012E   0020           00483     BANKSEL     JOY2_LR
+012F   0225           00484     SUBWF       JOY2_LR,0               ;Subtract Upper Threshold from Joystick Value (Stored in W)
+0130   0020           00485     BANKSEL     STATUS                  ;JOY2_LR - UPPER_THRESHOLD
+0131   1803           00486     BTFSC       STATUS,0
+0132   2???           00487     GOTO        ACTUATOR_MOTOR_FORWARD  ;Result is Positive Joystick is above Threshold
+0133   0020           00488     BANKSEL     LOWER_THRESHOLD
+0134   0831           00489     MOVFW       LOWER_THRESHOLD
+0135   0020           00490     BANKSEL     JOY2_LR
+0136   0225           00491     SUBWF       JOY2_LR,0               ;Subtract Lower Threshold from Joystick Value (Stored in W)
+0137   0020           00492     BANKSEL     STATUS                  ;JOY2_LR - LOWER_THRESHOLD
+0138   1C03           00493     BTFSS       STATUS,0
+0139   2???           00494     GOTO        ACTUATOR_MOTOR_REVERSE  ;Result is Negative Joystick is below Threshold
+013A   2???           00495     GOTO        ACTUATOR_MOTOR_STOP     ;Joystick is Neither above or below thresholds
+013B                  00496 ACTUATOR_MOTOR_FORWARD
+013B   0020           00497     BANKSEL     FORWARD_COUNT
+013C   082C           00498     MOVFW       FORWARD_COUNT
+013D   0020           00499     BANKSEL     ACTUATOR_MOTOR_STATUS
+013E   00B3           00500     MOVWF       ACTUATOR_MOTOR_STATUS
+013F   2???           00501     GOTO        DETERMINE_ACTUATOR_STATE_END
+0140                  00502 ACTUATOR_MOTOR_REVERSE
+0140   0020           00503     BANKSEL     REVERSE_COUNT
+0141   082E           00504     MOVFW       REVERSE_COUNT
+0142   0020           00505     BANKSEL     ACTUATOR_MOTOR_STATUS
+0143   00B3           00506     MOVWF       ACTUATOR_MOTOR_STATUS
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 20
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0144   2???           00507     GOTO        DETERMINE_ACTUATOR_STATE_END
+0145                  00508 ACTUATOR_MOTOR_STOP
+0145   0020           00509     BANKSEL     STOP_COUNT
+0146   082D           00510     MOVFW       STOP_COUNT
+0147   0020           00511     BANKSEL     ACTUATOR_MOTOR_STATUS
+0148   00B3           00512     MOVWF       ACTUATOR_MOTOR_STATUS
+0149                  00513 DETERMINE_ACTUATOR_STATE_END
+0149   0008           00514     RETURN
+                      00515     
+                      00516 ;******************************************
+                      00517 ;Main Code
+                      00518 ;******************************************
+014A                  00519 MAIN
+                      00520     ;************************************************************************************************
+                      00521     ;*** UPDATE_DRIVE_STATUS will run every time a full 4 byte I2C Packet is received.  The flag  ***
+                      00522     ;*** I2C_RX_COMPLETE Bit 0 is set within the I2C_RECEIVE function after the fourth data       ***
+                      00523     ;*** byte is received.  See Unv_Slave_I2C_SetUp.inc                                           ***
+                      00524     ;************************************************************************************************
+014A   0020           00525     BANKSEL     I2C_RX_COMPLETE
+014B   1847           00526     BTFSC       I2C_RX_COMPLETE,0
+014C   2???           00527     CALL        UPDATE_DRIVE_STATUS         ;Full I2C Data Packet Received.  Save Temp Data, Check Joyst
+                            icks, Update Outputs
+014D   2???           00528     GOTO        MAIN
+                      00529 
+09E4 1EFF             00530     END                         ;END PROGRAM DIRECTIVE *******************************
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 21
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ABDEN                             00000000
+ABDOVF                            00000007
+ACKDT                             00000005
+ACKEN                             00000004
+ACKSTAT                           00000006
+ACKTIM                            00000007
+ACTUATOR_MOTOR_COUNT              00000032
+ACTUATOR_MOTOR_FORWARD            0000013B
+ACTUATOR_MOTOR_REVERSE            00000140
+ACTUATOR_MOTOR_STATUS             00000033
+ACTUATOR_MOTOR_STOP               00000145
+ADCON0                            0000009D
+ADCON1                            0000009E
+ADCON2                            0000009F
+ADCS0                             00000004
+ADCS1                             00000005
+ADCS2                             00000006
+ADD0                              00000000
+ADD1                              00000001
+ADD2                              00000002
+ADD3                              00000003
+ADD4                              00000004
+ADD5                              00000005
+ADD6                              00000006
+ADD7                              00000007
+ADDEN                             00000003
+ADDRESS_R                         00000041
+ADDRESS_RX                        0000001A
+ADDRESS_W                         00000040
+ADFM                              00000007
+ADFVR0                            00000000
+ADFVR1                            00000001
+ADGO                              00000001
+ADIE                              00000006
+ADIF                              00000006
+ADNREF                            00000002
+ADON                              00000000
+ADPREF0                           00000000
+ADPREF1                           00000001
+ADRES                             0000009B
+ADRESH                            0000009C
+ADRESL                            0000009B
+ADRMD                             00000007
+AHEN                              00000001
+ANSA0                             00000000
+ANSA1                             00000001
+ANSA2                             00000002
+ANSA3                             00000003
+ANSA4                             00000004
+ANSA5                             00000005
+ANSA7                             00000007
+ANSB0                             00000000
+ANSB1                             00000001
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 22
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ANSB2                             00000002
+ANSB3                             00000003
+ANSB4                             00000004
+ANSB5                             00000005
+ANSB6                             00000006
+ANSC0                             00000000
+ANSC1                             00000001
+ANSC2                             00000002
+ANSC3                             00000003
+ANSC4                             00000004
+ANSC5                             00000005
+ANSC6                             00000006
+ANSC7                             00000007
+ANSELA                            0000018C
+ANSELB                            0000018D
+ANSELC                            0000018E
+APFCON                            0000011D
+APFCON0                           0000011D
+APFCON1                           0000011D
+APFCON2                           0000011C
+BAUD                              D'100'
+BAUD1CON                          0000019F
+BAUDCON                           0000019F
+BAUDCON1                          0000019F
+BAUDCTL                           0000019F
+BAUDCTL1                          0000019F
+BCL1IE                            00000003
+BCL1IF                            00000003
+BF                                00000000
+BOEN                              00000004
+BORCON                            00000116
+BORFS                             00000006
+BORRDY                            00000000
+BOTH_FORWARD                      000000E8
+BOTH_REVERSE                      000000EF
+BOTH_STOP                         000000E1
+BRG16                             00000003
+BRGH                              00000002
+BSR                               00000008
+BSR0                              00000000
+BSR1                              00000001
+BSR2                              00000002
+BSR3                              00000003
+BSR4                              00000004
+BSR_SHAD                          00000FE6
+BUF0                              00000000
+BUF1                              00000001
+BUF2                              00000002
+BUF3                              00000003
+BUF4                              00000004
+BUF5                              00000005
+BUF6                              00000006
+BUF7                              00000007
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 23
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+C                                 00000000
+C1HYS                             00000001
+C1IE                              00000005
+C1IF                              00000005
+C1INTN                            00000006
+C1INTP                            00000007
+C1NCH0                            00000000
+C1NCH1                            00000001
+C1NCH2                            00000002
+C1OE                              00000005
+C1ON                              00000007
+C1OUT                             00000006
+C1PCH0                            00000003
+C1PCH1                            00000004
+C1PCH2                            00000005
+C1POL                             00000004
+C1SP                              00000002
+C1SYNC                            00000000
+C1ZLF                             00000003
+C2HYS                             00000001
+C2IE                              00000006
+C2IF                              00000006
+C2INTN                            00000006
+C2INTP                            00000007
+C2NCH0                            00000000
+C2NCH1                            00000001
+C2NCH2                            00000002
+C2OE                              00000005
+C2ON                              00000007
+C2OUT                             00000006
+C2OUTSEL                          00000007
+C2PCH0                            00000003
+C2PCH1                            00000004
+C2PCH2                            00000005
+C2POL                             00000004
+C2SP                              00000002
+C2SYNC                            00000000
+C2ZLF                             00000003
+C3HYS                             00000001
+C3IE                              00000001
+C3IF                              00000001
+C3INTN                            00000006
+C3INTP                            00000007
+C3NCH0                            00000000
+C3NCH1                            00000001
+C3NCH2                            00000002
+C3OE                              00000005
+C3ON                              00000007
+C3OUT                             00000006
+C3PCH0                            00000003
+C3PCH1                            00000004
+C3PCH2                            00000005
+C3POL                             00000004
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 24
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+C3SP                              00000002
+C3SYNC                            00000000
+C3ZLF                             00000003
+C4HYS                             00000001
+C4IE                              00000002
+C4IF                              00000002
+C4INTN                            00000006
+C4INTP                            00000007
+C4NCH0                            00000000
+C4NCH1                            00000001
+C4NCH2                            00000002
+C4OE                              00000005
+C4ON                              00000007
+C4OUT                             00000006
+C4PCH0                            00000003
+C4PCH1                            00000004
+C4PCH2                            00000005
+C4POL                             00000004
+C4SP                              00000002
+C4SYNC                            00000000
+C4ZLF                             00000003
+CCP1CON                           00000293
+CCP1IE                            00000002
+CCP1IF                            00000002
+CCP1M0                            00000000
+CCP1M1                            00000001
+CCP1M2                            00000002
+CCP1M3                            00000003
+CCP1SEL                           00000006
+CCP2CON                           0000029A
+CCP2IE                            00000000
+CCP2IF                            00000000
+CCP2M0                            00000000
+CCP2M1                            00000001
+CCP2M2                            00000002
+CCP2M3                            00000003
+CCP2SEL                           00000000
+CCP3CON                           00000313
+CCP3IE                            00000004
+CCP3IF                            00000004
+CCP3M0                            00000000
+CCP3M1                            00000001
+CCP3M2                            00000002
+CCP3M3                            00000003
+CCP3SEL                           00000000
+CCPR1                             00000291
+CCPR1H                            00000292
+CCPR1L                            00000291
+CCPR2                             00000298
+CCPR2H                            00000299
+CCPR2L                            00000298
+CCPR3                             00000311
+CCPR3H                            00000312
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 25
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+CCPR3L                            00000311
+CDAFVR0                           00000002
+CDAFVR1                           00000003
+CFGS                              00000006
+CHECK_ACTUATOR_MOTOR              00000042
+CHECK_LEFT_MOTOR                  00000083
+CHECK_L_MOTOR                     0000003D
+CHECK_RIGHT_MOTOR                 00000074
+CHS0                              00000002
+CHS1                              00000003
+CHS2                              00000004
+CHS3                              00000005
+CHS4                              00000006
+CHSN0                             00000000
+CHSN1                             00000001
+CHSN2                             00000002
+CHSN3                             00000003
+CKE                               00000006
+CKP                               00000004
+CLKRCON                           0000051A
+CLKRDC0                           00000003
+CLKRDC1                           00000004
+CLKRDIV0                          00000000
+CLKRDIV1                          00000001
+CLKRDIV2                          00000002
+CLKREN                            00000007
+CLKROE                            00000006
+CLKRSLR                           00000005
+CM1CON0                           00000111
+CM1CON1                           00000112
+CM2CON0                           00000113
+CM2CON1                           00000114
+CM3CON0                           0000011E
+CM3CON1                           0000011F
+CM4CON0                           0000011A
+CM4CON1                           0000011B
+CMOUT                             00000115
+CREN                              00000004
+CSRC                              00000007
+CURRENT_DRIVE_STATE               0000002F
+C_SHAD                            00000000
+DAC1CON0                          00000118
+DAC1CON1                          00000119
+DAC1EN                            00000007
+DAC1NSS                           00000000
+DAC1OE1                           00000005
+DAC1OE2                           00000004
+DAC1PSS0                          00000002
+DAC1PSS1                          00000003
+DAC1R0                            00000000
+DAC1R1                            00000001
+DAC1R2                            00000002
+DAC1R3                            00000003
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 26
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+DAC1R4                            00000004
+DAC1R5                            00000005
+DAC1R6                            00000006
+DAC1R7                            00000007
+DAC2CON0                          00000591
+DAC2CON1                          00000592
+DAC2EN                            00000007
+DAC2OE1                           00000005
+DAC2OE2                           00000004
+DAC2REF                           00000592
+DAC3CON0                          00000593
+DAC3CON1                          00000594
+DAC3EN                            00000007
+DAC3OE1                           00000005
+DAC3OE2                           00000004
+DAC3REF                           00000594
+DAC4CON0                          00000595
+DAC4CON1                          00000596
+DAC4EN                            00000007
+DAC4OE1                           00000005
+DAC4OE2                           00000004
+DAC4REF                           00000596
+DACEN                             00000007
+DACNSS                            00000000
+DACOE0                            00000004
+DACOE1                            00000005
+DACPSS0                           00000002
+DACPSS1                           00000003
+DACR0                             00000000
+DACR1                             00000001
+DACR2                             00000002
+DACR3                             00000003
+DACR4                             00000004
+DACR5                             00000005
+DACR6                             00000006
+DACR7                             00000007
+DC                                00000001
+DC1B0                             00000004
+DC1B1                             00000005
+DC2B0                             00000004
+DC2B1                             00000005
+DC3B0                             00000004
+DC3B1                             00000005
+DC_SHAD                           00000001
+DETERMINE_ACTUATOR_STATE          0000012C
+DETERMINE_ACTUATOR_STATE_END      00000149
+DETERMINE_DRIVE_STATE             00000072
+DETERMINE_DRIVE_STATE_END         000000A9
+DHEN                              00000000
+DONE                              00000001
+D_NOT_A                           00000005
+EEADR                             00000191
+EEADRH                            00000192
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 27
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+EEADRL                            00000191
+EECON1                            00000195
+EECON2                            00000196
+EEDAT                             00000193
+EEDATH                            00000194
+EEDATL                            00000193
+EEIE                              00000004
+EEIF                              00000004
+EEPGD                             00000007
+EN                                00000007
+F                                 00000001
+FERR                              00000002
+FIRST_COUNT_ZERO                  00000020
+FIRST_DATA_BYTE                   00000038
+FORWARD_COUNT                     0000002C
+FOSC                              D'16000'
+FOURTH_DATA_BYTE                  00000047
+FREE                              00000004
+FSR0                              00000004
+FSR0H                             00000005
+FSR0H_SHAD                        00000FE9
+FSR0L                             00000004
+FSR0L_SHAD                        00000FE8
+FSR1                              00000006
+FSR1H                             00000007
+FSR1H_SHAD                        00000FEB
+FSR1L                             00000006
+FSR1L_SHAD                        00000FEA
+FVRCON                            00000117
+FVREN                             00000007
+FVRRDY                            00000006
+GCEN                              00000007
+GIE                               00000007
+GO                                00000001
+GO_NOT_DONE                       00000001
+HFIOFL                            00000003
+HFIOFR                            00000004
+HFIOFS                            00000000
+I2C_COM_TIMEOUT                   0000004A
+I2C_COM_TIMEOUT_END               00000057
+I2C_DATA_RX                       0000001F
+I2C_RECEIVE                       00000015
+I2C_RECEIVE_DATA_END              00000051
+I2C_RECEIVE_END                   00000053
+I2C_RX_COMPLETE                   00000047
+I2C_RX_COUNTER                    00000046
+I2C_RX_TEMP_1                     00000042
+I2C_RX_TEMP_2                     00000043
+I2C_RX_TEMP_3                     00000044
+I2C_RX_TEMP_4                     00000045
+I2C_SETUP_SLAVE                   00000000
+I2C_TIMEOUT_COUNT                 00000020
+INDF0                             00000000
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 28
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+INDF1                             00000001
+INITIALIZE                        00000000
+INLVLA                            0000038C
+INLVLA0                           00000000
+INLVLA1                           00000001
+INLVLA2                           00000002
+INLVLA3                           00000003
+INLVLA4                           00000004
+INLVLA5                           00000005
+INLVLA6                           00000006
+INLVLA7                           00000007
+INLVLB                            0000038D
+INLVLB0                           00000000
+INLVLB1                           00000001
+INLVLB2                           00000002
+INLVLB3                           00000003
+INLVLB4                           00000004
+INLVLB5                           00000005
+INLVLB6                           00000006
+INLVLB7                           00000007
+INLVLC                            0000038E
+INLVLC0                           00000000
+INLVLC1                           00000001
+INLVLC2                           00000002
+INLVLC3                           00000003
+INLVLC4                           00000004
+INLVLC5                           00000005
+INLVLC6                           00000006
+INLVLC7                           00000007
+INLVLE                            00000390
+INLVLE3                           00000003
+INTCON                            0000000B
+INTE                              00000004
+INTEDG                            00000006
+INTERRUPT                         0000000E
+INTF                              00000001
+IOCAF                             00000393
+IOCAF0                            00000000
+IOCAF1                            00000001
+IOCAF2                            00000002
+IOCAF3                            00000003
+IOCAF4                            00000004
+IOCAF5                            00000005
+IOCAF6                            00000006
+IOCAF7                            00000007
+IOCAN                             00000392
+IOCAN0                            00000000
+IOCAN1                            00000001
+IOCAN2                            00000002
+IOCAN3                            00000003
+IOCAN4                            00000004
+IOCAN5                            00000005
+IOCAN6                            00000006
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 29
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+IOCAN7                            00000007
+IOCAP                             00000391
+IOCAP0                            00000000
+IOCAP1                            00000001
+IOCAP2                            00000002
+IOCAP3                            00000003
+IOCAP4                            00000004
+IOCAP5                            00000005
+IOCAP6                            00000006
+IOCAP7                            00000007
+IOCBF                             00000396
+IOCBF0                            00000000
+IOCBF1                            00000001
+IOCBF2                            00000002
+IOCBF3                            00000003
+IOCBF4                            00000004
+IOCBF5                            00000005
+IOCBF6                            00000006
+IOCBF7                            00000007
+IOCBN                             00000395
+IOCBN0                            00000000
+IOCBN1                            00000001
+IOCBN2                            00000002
+IOCBN3                            00000003
+IOCBN4                            00000004
+IOCBN5                            00000005
+IOCBN6                            00000006
+IOCBN7                            00000007
+IOCBP                             00000394
+IOCBP0                            00000000
+IOCBP1                            00000001
+IOCBP2                            00000002
+IOCBP3                            00000003
+IOCBP4                            00000004
+IOCBP5                            00000005
+IOCBP6                            00000006
+IOCBP7                            00000007
+IOCCF                             00000399
+IOCCF0                            00000000
+IOCCF1                            00000001
+IOCCF2                            00000002
+IOCCF3                            00000003
+IOCCF4                            00000004
+IOCCF5                            00000005
+IOCCF6                            00000006
+IOCCF7                            00000007
+IOCCN                             00000398
+IOCCN0                            00000000
+IOCCN1                            00000001
+IOCCN2                            00000002
+IOCCN3                            00000003
+IOCCN4                            00000004
+IOCCN5                            00000005
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 30
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+IOCCN6                            00000006
+IOCCN7                            00000007
+IOCCP                             00000397
+IOCCP0                            00000000
+IOCCP1                            00000001
+IOCCP2                            00000002
+IOCCP3                            00000003
+IOCCP4                            00000004
+IOCCP5                            00000005
+IOCCP6                            00000006
+IOCCP7                            00000007
+IOCEF                             0000039F
+IOCEF3                            00000003
+IOCEN                             0000039E
+IOCEN3                            00000003
+IOCEP                             0000039D
+IOCEP3                            00000003
+IOCIE                             00000003
+IOCIF                             00000000
+IRCF0                             00000003
+IRCF1                             00000004
+IRCF2                             00000005
+IRCF3                             00000006
+JOY1_LR                           00000023
+JOY1_UD                           00000022
+JOY2_LR                           00000025
+JOY2_UD                           00000024
+LATA                              0000010C
+LATA0                             00000000
+LATA1                             00000001
+LATA2                             00000002
+LATA3                             00000003
+LATA4                             00000004
+LATA5                             00000005
+LATA6                             00000006
+LATA7                             00000007
+LATB                              0000010D
+LATB0                             00000000
+LATB1                             00000001
+LATB2                             00000002
+LATB3                             00000003
+LATB4                             00000004
+LATB5                             00000005
+LATB6                             00000006
+LATB7                             00000007
+LATC                              0000010E
+LATC0                             00000000
+LATC1                             00000001
+LATC2                             00000002
+LATC3                             00000003
+LATC4                             00000004
+LATC5                             00000005
+LATC6                             00000006
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 31
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+LATC7                             00000007
+LEFT_MOTOR_FORWARD                0000009E
+LEFT_MOTOR_REVERSE                000000A1
+LEFT_MOTOR_STOP                   000000A4
+LFIOFR                            00000001
+LOWER_THRESHOLD                   00000031
+LWLO                              00000005
+L_MOTOR_COUNT                     00000029
+L_MOTOR_STATUS                    0000002B
+MAIN                              0000014A
+MC1OUT                            00000000
+MC2OUT                            00000001
+MC3OUT                            00000002
+MC4OUT                            00000003
+MFIOFR                            00000002
+MSK0                              00000000
+MSK1                              00000001
+MSK2                              00000002
+MSK3                              00000003
+MSK4                              00000004
+MSK5                              00000005
+MSK6                              00000006
+MSK7                              00000007
+NOT_BOR                           00000000
+NOT_PD                            00000003
+NOT_POR                           00000001
+NOT_RI                            00000002
+NOT_RMCLR                         00000003
+NOT_RWDT                          00000004
+NOT_T1SYNC                        00000002
+NOT_TO                            00000004
+NOT_WPUEN                         00000007
+ODCONA                            0000028C
+ODCONA0                           00000000
+ODCONA1                           00000001
+ODCONA2                           00000002
+ODCONA3                           00000003
+ODCONA4                           00000004
+ODCONA5                           00000005
+ODCONA6                           00000006
+ODCONA7                           00000007
+ODCONB                            0000028D
+ODCONB0                           00000000
+ODCONB1                           00000001
+ODCONB2                           00000002
+ODCONB3                           00000003
+ODCONB4                           00000004
+ODCONB5                           00000005
+ODCONB6                           00000006
+ODCONB7                           00000007
+ODCONC                            0000028E
+ODCONC0                           00000000
+ODCONC1                           00000001
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 32
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ODCONC2                           00000002
+ODCONC3                           00000003
+ODCONC4                           00000004
+ODCONC5                           00000005
+ODCONC6                           00000006
+ODCONC7                           00000007
+OERR                              00000001
+OPA1CON                           00000511
+OPA1EN                            00000007
+OPA1PCH0                          00000000
+OPA1PCH1                          00000001
+OPA1PCH2                          00000002
+OPA1SP                            00000006
+OPA2CON                           00000513
+OPA2EN                            00000007
+OPA2PCH0                          00000000
+OPA2PCH1                          00000001
+OPA2PCH2                          00000002
+OPA2SP                            00000006
+OPTION_REG                        00000095
+OSCCON                            00000099
+OSCSTAT                           0000009A
+OSCTUNE                           00000098
+OSFIE                             00000007
+OSFIF                             00000007
+OSTS                              00000005
+P                                 00000004
+P1ARSEN                           00000005
+P1ASDEN                           00000006
+P1ASDLA                           00000000
+P1ASDLB                           00000001
+P1ASDLC                           00000002
+P1ASDLD                           00000003
+P1ASDLE                           00000004
+P1ASDLF                           00000005
+P1ASDOV                           00000000
+P1ASDSC1                          00000001
+P1ASDSC2                          00000002
+P1ASDSC3                          00000003
+P1ASDSC4                          00000004
+P1ASDSIN                          00000007
+P1ASE                             00000007
+P1CPRE0                           00000004
+P1CPRE1                           00000005
+P1CSRC0                           00000000
+P1CSRC1                           00000001
+P1DBFE                            00000005
+P1DBRE                            00000004
+P1DCPOL                           00000005
+P1DCSC1                           00000001
+P1DCSC2                           00000002
+P1DCSC3                           00000003
+P1DCSC4                           00000004
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 33
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P1DCSIN                           00000007
+P1DCST                            00000000
+P1FEBM0                           00000004
+P1FEBM1                           00000005
+P1FEBSC1                          00000001
+P1FEBSC2                          00000002
+P1FEBSC3                          00000003
+P1FEBSC4                          00000004
+P1FEBSIN                          00000007
+P1HSMEN                           00000000
+P1INPOL                           00000006
+P1LSMEN                           00000001
+P1MDLBIT                          00000005
+P1MDLEN                           00000007
+P1MDLPOL                          00000006
+P1MODE0                           00000000
+P1MODE1                           00000001
+P1MODE2                           00000002
+P1MODE3                           00000003
+P1MSRC0                           00000000
+P1MSRC1                           00000001
+P1MSRC2                           00000002
+P1MSRC3                           00000003
+P1OEA                             00000000
+P1OEB                             00000001
+P1OEC                             00000002
+P1OED                             00000003
+P1OEE                             00000004
+P1OEF                             00000005
+P1PHSC1                           00000001
+P1PHSC2                           00000002
+P1PHSC3                           00000003
+P1PHSC4                           00000004
+P1PHSIN                           00000007
+P1PHST                            00000000
+P1POFST                           00000007
+P1POLA                            00000000
+P1POLB                            00000001
+P1POLC                            00000002
+P1POLD                            00000003
+P1POLE                            00000004
+P1POLF                            00000005
+P1PRPOL                           00000006
+P1PRSC1                           00000001
+P1PRSC2                           00000002
+P1PRSC3                           00000003
+P1PRSC4                           00000004
+P1PRSIN                           00000007
+P1PRST                            00000000
+P1REBM0                           00000000
+P1REBM1                           00000001
+P1REBSC1                          00000001
+P1REBSC2                          00000002
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 34
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P1REBSC3                          00000003
+P1REBSC4                          00000004
+P1REBSIN                          00000007
+P1SSYNC                           00000007
+P1STRA                            00000000
+P1STRB                            00000001
+P1STRC                            00000002
+P1STRD                            00000003
+P1STRE                            00000004
+P1STRF                            00000005
+P1SYNC0                           00000000
+P1SYNC1                           00000001
+P1SYNC2                           00000002
+P1TDCIE                           00000005
+P1TDCIF                           00000001
+P1TOVIE                           00000007
+P1TOVIF                           00000003
+P1TPHIE                           00000006
+P1TPHIF                           00000002
+P1TPRIE                           00000004
+P1TPRIF                           00000000
+P2ARSEN                           00000005
+P2ASDEN                           00000006
+P2ASDLA                           00000000
+P2ASDLB                           00000001
+P2ASDOV                           00000000
+P2ASDSC1                          00000001
+P2ASDSC2                          00000002
+P2ASDSC3                          00000003
+P2ASDSC4                          00000004
+P2ASDSIN                          00000007
+P2ASE                             00000007
+P2CPRE0                           00000004
+P2CPRE1                           00000005
+P2CSRC0                           00000000
+P2CSRC1                           00000001
+P2DBFE                            00000005
+P2DBRE                            00000004
+P2DCPOL                           00000005
+P2DCSC1                           00000001
+P2DCSC2                           00000002
+P2DCSC3                           00000003
+P2DCSC4                           00000004
+P2DCSIN                           00000007
+P2DCST                            00000000
+P2FEBM0                           00000004
+P2FEBM1                           00000005
+P2FEBSC1                          00000001
+P2FEBSC2                          00000002
+P2FEBSC3                          00000003
+P2FEBSC4                          00000004
+P2FEBSIN                          00000007
+P2HSMEN                           00000000
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 35
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P2INPOL                           00000006
+P2LSMEN                           00000001
+P2MDLBIT                          00000005
+P2MDLEN                           00000007
+P2MDLPOL                          00000006
+P2MODE0                           00000000
+P2MODE1                           00000001
+P2MODE2                           00000002
+P2MODE3                           00000003
+P2MSRC0                           00000000
+P2MSRC1                           00000001
+P2MSRC2                           00000002
+P2MSRC3                           00000003
+P2OEA                             00000000
+P2OEB                             00000001
+P2PHSC1                           00000001
+P2PHSC2                           00000002
+P2PHSC3                           00000003
+P2PHSC4                           00000004
+P2PHSIN                           00000007
+P2PHST                            00000000
+P2POFST                           00000007
+P2POLA                            00000000
+P2POLB                            00000001
+P2PRPOL                           00000006
+P2PRSC1                           00000001
+P2PRSC2                           00000002
+P2PRSC3                           00000003
+P2PRSC4                           00000004
+P2PRSIN                           00000007
+P2PRST                            00000000
+P2REBM0                           00000000
+P2REBM1                           00000001
+P2REBSC1                          00000001
+P2REBSC2                          00000002
+P2REBSC3                          00000003
+P2REBSC4                          00000004
+P2REBSIN                          00000007
+P2SSYNC                           00000007
+P2STRA                            00000000
+P2STRB                            00000001
+P2SYNC0                           00000000
+P2SYNC1                           00000001
+P2SYNC2                           00000002
+P2TDCIE                           00000005
+P2TDCIF                           00000001
+P2TOVIE                           00000007
+P2TOVIF                           00000003
+P2TPHIE                           00000006
+P2TPHIF                           00000002
+P2TPRIE                           00000004
+P2TPRIF                           00000000
+P3ARSEN                           00000005
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 36
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P3ASDEN                           00000006
+P3ASDLA                           00000000
+P3ASDLB                           00000001
+P3ASDOV                           00000000
+P3ASDSC1                          00000001
+P3ASDSC2                          00000002
+P3ASDSC3                          00000003
+P3ASDSC4                          00000004
+P3ASDSIN                          00000007
+P3ASE                             00000007
+P3CPRE0                           00000004
+P3CPRE1                           00000005
+P3CSRC0                           00000000
+P3CSRC1                           00000001
+P3DBFE                            00000005
+P3DBRE                            00000004
+P3DCPOL                           00000005
+P3DCSC1                           00000001
+P3DCSC2                           00000002
+P3DCSC3                           00000003
+P3DCSC4                           00000004
+P3DCSIN                           00000007
+P3DCST                            00000000
+P3FEBM0                           00000004
+P3FEBM1                           00000005
+P3FEBSC1                          00000001
+P3FEBSC2                          00000002
+P3FEBSC3                          00000003
+P3FEBSC4                          00000004
+P3FEBSIN                          00000007
+P3HSMEN                           00000000
+P3INPOL                           00000006
+P3LSMEN                           00000001
+P3MDLBIT                          00000005
+P3MDLEN                           00000007
+P3MDLPOL                          00000006
+P3MODE0                           00000000
+P3MODE1                           00000001
+P3MODE2                           00000002
+P3MODE3                           00000003
+P3MSRC0                           00000000
+P3MSRC1                           00000001
+P3MSRC2                           00000002
+P3MSRC3                           00000003
+P3OEA                             00000000
+P3OEB                             00000001
+P3PHSC1                           00000001
+P3PHSC2                           00000002
+P3PHSC3                           00000003
+P3PHSC4                           00000004
+P3PHSIN                           00000007
+P3PHST                            00000000
+P3POFST                           00000007
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 37
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P3POLA                            00000000
+P3POLB                            00000001
+P3PRPOL                           00000006
+P3PRSC1                           00000001
+P3PRSC2                           00000002
+P3PRSC3                           00000003
+P3PRSC4                           00000004
+P3PRSIN                           00000007
+P3PRST                            00000000
+P3REBM0                           00000000
+P3REBM1                           00000001
+P3REBSC1                          00000001
+P3REBSC2                          00000002
+P3REBSC3                          00000003
+P3REBSC4                          00000004
+P3REBSIN                          00000007
+P3SSYNC                           00000007
+P3STRA                            00000000
+P3STRB                            00000001
+P3SYNC0                           00000000
+P3SYNC1                           00000001
+P3SYNC2                           00000002
+P3TDCIE                           00000005
+P3TDCIF                           00000001
+P3TOVIE                           00000007
+P3TOVIF                           00000003
+P3TPHIE                           00000006
+P3TPHIF                           00000002
+P3TPRIE                           00000004
+P3TPRIF                           00000000
+P4ARSEN                           00000005
+P4ASDEN                           00000006
+P4ASDLA                           00000000
+P4ASDLB                           00000001
+P4ASDOV                           00000000
+P4ASDSC1                          00000001
+P4ASDSC2                          00000002
+P4ASDSC3                          00000003
+P4ASDSC4                          00000004
+P4ASDSIN                          00000007
+P4ASE                             00000007
+P4CPRE0                           00000004
+P4CPRE1                           00000005
+P4CSRC0                           00000000
+P4CSRC1                           00000001
+P4DBFE                            00000005
+P4DBRE                            00000004
+P4DCPOL                           00000005
+P4DCSC1                           00000001
+P4DCSC2                           00000002
+P4DCSC3                           00000003
+P4DCSC4                           00000004
+P4DCSIN                           00000007
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 38
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P4DCST                            00000000
+P4FEBM0                           00000004
+P4FEBM1                           00000005
+P4FEBSC1                          00000001
+P4FEBSC2                          00000002
+P4FEBSC3                          00000003
+P4FEBSC4                          00000004
+P4FEBSIN                          00000007
+P4HSMEN                           00000000
+P4INPOL                           00000006
+P4LSMEN                           00000001
+P4MDLBIT                          00000005
+P4MDLEN                           00000007
+P4MDLPOL                          00000006
+P4MODE0                           00000000
+P4MODE1                           00000001
+P4MODE2                           00000002
+P4MODE3                           00000003
+P4MSRC0                           00000000
+P4MSRC1                           00000001
+P4MSRC2                           00000002
+P4MSRC3                           00000003
+P4OEA                             00000000
+P4OEB                             00000001
+P4PHSC1                           00000001
+P4PHSC2                           00000002
+P4PHSC3                           00000003
+P4PHSC4                           00000004
+P4PHSIN                           00000007
+P4PHST                            00000000
+P4POFST                           00000007
+P4POLA                            00000000
+P4POLB                            00000001
+P4PRPOL                           00000006
+P4PRSC1                           00000001
+P4PRSC2                           00000002
+P4PRSC3                           00000003
+P4PRSC4                           00000004
+P4PRSIN                           00000007
+P4PRST                            00000000
+P4REBM0                           00000000
+P4REBM1                           00000001
+P4REBSC1                          00000001
+P4REBSC2                          00000002
+P4REBSC3                          00000003
+P4REBSC4                          00000004
+P4REBSIN                          00000007
+P4SSYNC                           00000007
+P4STRA                            00000000
+P4STRB                            00000001
+P4SYNC0                           00000000
+P4SYNC1                           00000001
+P4SYNC2                           00000002
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 39
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P4TDCIE                           00000005
+P4TDCIF                           00000001
+P4TOVIE                           00000007
+P4TOVIF                           00000003
+P4TPHIE                           00000006
+P4TPHIF                           00000002
+P4TPRIE                           00000004
+P4TPRIF                           00000000
+PCH0                              00000000
+PCH1                              00000001
+PCH2                              00000002
+PCIE                              00000006
+PCL                               00000002
+PCLATH                            0000000A
+PCLATH_SHAD                       00000FE7
+PCON                              00000096
+PEIE                              00000006
+PEN                               00000002
+PIE1                              00000091
+PIE2                              00000092
+PIE3                              00000093
+PIE4                              00000094
+PIR1                              00000011
+PIR2                              00000012
+PIR3                              00000013
+PIR4                              00000014
+PLLR                              00000006
+PMSC3TIE                          00000006
+PORTA                             0000000C
+PORTB                             0000000D
+PORTC                             0000000E
+PORTE                             00000010
+PR2                               0000001B
+PS0                               00000000
+PS1                               00000001
+PS2                               00000002
+PSA                               00000003
+PSMC1ASDC                         00000E9D
+PSMC1ASDL                         00000E9E
+PSMC1ASDS                         00000E9F
+PSMC1BLKF                         00000EAC
+PSMC1BLKF0                        00000000
+PSMC1BLKF1                        00000001
+PSMC1BLKF2                        00000002
+PSMC1BLKF3                        00000003
+PSMC1BLKF4                        00000004
+PSMC1BLKF5                        00000005
+PSMC1BLKF6                        00000006
+PSMC1BLKF7                        00000007
+PSMC1BLKR                         00000EAB
+PSMC1BLKR0                        00000000
+PSMC1BLKR1                        00000001
+PSMC1BLKR2                        00000002
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 40
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC1BLKR3                        00000003
+PSMC1BLKR4                        00000004
+PSMC1BLKR5                        00000005
+PSMC1BLKR6                        00000006
+PSMC1BLKR7                        00000007
+PSMC1BLNK                         00000E97
+PSMC1CLK                          00000E94
+PSMC1CON                          00000E91
+PSMC1DBF                          00000EAA
+PSMC1DBF0                         00000000
+PSMC1DBF1                         00000001
+PSMC1DBF2                         00000002
+PSMC1DBF3                         00000003
+PSMC1DBF4                         00000004
+PSMC1DBF5                         00000005
+PSMC1DBF6                         00000006
+PSMC1DBF7                         00000007
+PSMC1DBR                          00000EA9
+PSMC1DBR0                         00000000
+PSMC1DBR1                         00000001
+PSMC1DBR2                         00000002
+PSMC1DBR3                         00000003
+PSMC1DBR4                         00000004
+PSMC1DBR5                         00000005
+PSMC1DBR6                         00000006
+PSMC1DBR7                         00000007
+PSMC1DC                           00000EA3
+PSMC1DC0                          00000000
+PSMC1DC1                          00000001
+PSMC1DC10                         00000002
+PSMC1DC11                         00000003
+PSMC1DC12                         00000004
+PSMC1DC13                         00000005
+PSMC1DC14                         00000006
+PSMC1DC15                         00000007
+PSMC1DC2                          00000002
+PSMC1DC3                          00000003
+PSMC1DC4                          00000004
+PSMC1DC5                          00000005
+PSMC1DC6                          00000006
+PSMC1DC7                          00000007
+PSMC1DC8                          00000000
+PSMC1DC9                          00000001
+PSMC1DCH                          00000EA4
+PSMC1DCL                          00000EA3
+PSMC1DCS                          00000E9B
+PSMC1EN                           00000007
+PSMC1FEBS                         00000E99
+PSMC1FFA                          00000EAD
+PSMC1FFA0                         00000000
+PSMC1FFA1                         00000001
+PSMC1FFA2                         00000002
+PSMC1FFA3                         00000003
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 41
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC1INT                          00000EA0
+PSMC1LD                           00000006
+PSMC1MDL                          00000E92
+PSMC1OEN                          00000E95
+PSMC1PH                           00000EA1
+PSMC1PH0                          00000000
+PSMC1PH1                          00000001
+PSMC1PH10                         00000002
+PSMC1PH11                         00000003
+PSMC1PH12                         00000004
+PSMC1PH13                         00000005
+PSMC1PH14                         00000006
+PSMC1PH15                         00000007
+PSMC1PH2                          00000002
+PSMC1PH3                          00000003
+PSMC1PH4                          00000004
+PSMC1PH5                          00000005
+PSMC1PH6                          00000006
+PSMC1PH7                          00000007
+PSMC1PH8                          00000000
+PSMC1PH9                          00000001
+PSMC1PHH                          00000EA2
+PSMC1PHL                          00000EA1
+PSMC1PHS                          00000E9A
+PSMC1POL                          00000E96
+PSMC1PR                           00000EA5
+PSMC1PR0                          00000000
+PSMC1PR1                          00000001
+PSMC1PR10                         00000002
+PSMC1PR11                         00000003
+PSMC1PR12                         00000004
+PSMC1PR13                         00000005
+PSMC1PR14                         00000006
+PSMC1PR15                         00000007
+PSMC1PR2                          00000002
+PSMC1PR3                          00000003
+PSMC1PR4                          00000004
+PSMC1PR5                          00000005
+PSMC1PR6                          00000006
+PSMC1PR7                          00000007
+PSMC1PR8                          00000000
+PSMC1PR9                          00000001
+PSMC1PRH                          00000EA6
+PSMC1PRL                          00000EA5
+PSMC1PRS                          00000E9C
+PSMC1REBS                         00000E98
+PSMC1SIE                          00000000
+PSMC1SIF                          00000000
+PSMC1STR0                         00000EAE
+PSMC1STR1                         00000EAF
+PSMC1SYNC                         00000E93
+PSMC1TIE                          00000004
+PSMC1TIF                          00000004
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 42
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC1TMR                          00000EA7
+PSMC1TMR0                         00000000
+PSMC1TMR1                         00000001
+PSMC1TMR10                        00000002
+PSMC1TMR11                        00000003
+PSMC1TMR12                        00000004
+PSMC1TMR13                        00000005
+PSMC1TMR14                        00000006
+PSMC1TMR15                        00000007
+PSMC1TMR2                         00000002
+PSMC1TMR3                         00000003
+PSMC1TMR4                         00000004
+PSMC1TMR5                         00000005
+PSMC1TMR6                         00000006
+PSMC1TMR7                         00000007
+PSMC1TMR8                         00000000
+PSMC1TMR9                         00000001
+PSMC1TMRH                         00000EA8
+PSMC1TMRL                         00000EA7
+PSMC2ASDC                         00000EBD
+PSMC2ASDL                         00000EBE
+PSMC2ASDS                         00000EBF
+PSMC2BLKF                         00000ECC
+PSMC2BLKF0                        00000000
+PSMC2BLKF1                        00000001
+PSMC2BLKF2                        00000002
+PSMC2BLKF3                        00000003
+PSMC2BLKF4                        00000004
+PSMC2BLKF5                        00000005
+PSMC2BLKF6                        00000006
+PSMC2BLKF7                        00000007
+PSMC2BLKR                         00000ECB
+PSMC2BLKR0                        00000000
+PSMC2BLKR1                        00000001
+PSMC2BLKR2                        00000002
+PSMC2BLKR3                        00000003
+PSMC2BLKR4                        00000004
+PSMC2BLKR5                        00000005
+PSMC2BLKR6                        00000006
+PSMC2BLKR7                        00000007
+PSMC2BLNK                         00000EB7
+PSMC2CLK                          00000EB4
+PSMC2CON                          00000EB1
+PSMC2DBF                          00000ECA
+PSMC2DBF0                         00000000
+PSMC2DBF1                         00000001
+PSMC2DBF2                         00000002
+PSMC2DBF3                         00000003
+PSMC2DBF4                         00000004
+PSMC2DBF5                         00000005
+PSMC2DBF6                         00000006
+PSMC2DBF7                         00000007
+PSMC2DBR                          00000EC9
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 43
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC2DBR0                         00000000
+PSMC2DBR1                         00000001
+PSMC2DBR2                         00000002
+PSMC2DBR3                         00000003
+PSMC2DBR4                         00000004
+PSMC2DBR5                         00000005
+PSMC2DBR6                         00000006
+PSMC2DBR7                         00000007
+PSMC2DC                           00000EC3
+PSMC2DC0                          00000000
+PSMC2DC1                          00000001
+PSMC2DC10                         00000002
+PSMC2DC11                         00000003
+PSMC2DC12                         00000004
+PSMC2DC13                         00000005
+PSMC2DC14                         00000006
+PSMC2DC15                         00000007
+PSMC2DC2                          00000002
+PSMC2DC3                          00000003
+PSMC2DC4                          00000004
+PSMC2DC5                          00000005
+PSMC2DC6                          00000006
+PSMC2DC7                          00000007
+PSMC2DC8                          00000000
+PSMC2DC9                          00000001
+PSMC2DCH                          00000EC4
+PSMC2DCL                          00000EC3
+PSMC2DCS                          00000EBB
+PSMC2EN                           00000007
+PSMC2FEBS                         00000EB9
+PSMC2FFA                          00000ECD
+PSMC2FFA0                         00000000
+PSMC2FFA1                         00000001
+PSMC2FFA2                         00000002
+PSMC2FFA3                         00000003
+PSMC2INT                          00000EC0
+PSMC2LD                           00000006
+PSMC2MDL                          00000EB2
+PSMC2OEN                          00000EB5
+PSMC2PH                           00000EC1
+PSMC2PH0                          00000000
+PSMC2PH1                          00000001
+PSMC2PH10                         00000002
+PSMC2PH11                         00000003
+PSMC2PH12                         00000004
+PSMC2PH13                         00000005
+PSMC2PH14                         00000006
+PSMC2PH15                         00000007
+PSMC2PH2                          00000002
+PSMC2PH3                          00000003
+PSMC2PH4                          00000004
+PSMC2PH5                          00000005
+PSMC2PH6                          00000006
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 44
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC2PH7                          00000007
+PSMC2PH8                          00000000
+PSMC2PH9                          00000001
+PSMC2PHH                          00000EC2
+PSMC2PHL                          00000EC1
+PSMC2PHS                          00000EBA
+PSMC2POL                          00000EB6
+PSMC2PR                           00000EC5
+PSMC2PR0                          00000000
+PSMC2PR1                          00000001
+PSMC2PR10                         00000002
+PSMC2PR11                         00000003
+PSMC2PR12                         00000004
+PSMC2PR13                         00000005
+PSMC2PR14                         00000006
+PSMC2PR15                         00000007
+PSMC2PR2                          00000002
+PSMC2PR3                          00000003
+PSMC2PR4                          00000004
+PSMC2PR5                          00000005
+PSMC2PR6                          00000006
+PSMC2PR7                          00000007
+PSMC2PR8                          00000000
+PSMC2PR9                          00000001
+PSMC2PRH                          00000EC6
+PSMC2PRL                          00000EC5
+PSMC2PRS                          00000EBC
+PSMC2REBS                         00000EB8
+PSMC2SIE                          00000001
+PSMC2SIF                          00000001
+PSMC2STR0                         00000ECE
+PSMC2STR1                         00000ECF
+PSMC2SYNC                         00000EB3
+PSMC2TIE                          00000005
+PSMC2TIF                          00000005
+PSMC2TMR                          00000EC7
+PSMC2TMR0                         00000000
+PSMC2TMR1                         00000001
+PSMC2TMR10                        00000002
+PSMC2TMR11                        00000003
+PSMC2TMR12                        00000004
+PSMC2TMR13                        00000005
+PSMC2TMR14                        00000006
+PSMC2TMR15                        00000007
+PSMC2TMR2                         00000002
+PSMC2TMR3                         00000003
+PSMC2TMR4                         00000004
+PSMC2TMR5                         00000005
+PSMC2TMR6                         00000006
+PSMC2TMR7                         00000007
+PSMC2TMR8                         00000000
+PSMC2TMR9                         00000001
+PSMC2TMRH                         00000EC8
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 45
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC2TMRL                         00000EC7
+PSMC3ASDC                         00000EDD
+PSMC3ASDL                         00000EDE
+PSMC3ASDS                         00000EDF
+PSMC3BLKF                         00000EEC
+PSMC3BLKF0                        00000000
+PSMC3BLKF1                        00000001
+PSMC3BLKF2                        00000002
+PSMC3BLKF3                        00000003
+PSMC3BLKF4                        00000004
+PSMC3BLKF5                        00000005
+PSMC3BLKF6                        00000006
+PSMC3BLKF7                        00000007
+PSMC3BLKR                         00000EEB
+PSMC3BLKR0                        00000000
+PSMC3BLKR1                        00000001
+PSMC3BLKR2                        00000002
+PSMC3BLKR3                        00000003
+PSMC3BLKR4                        00000004
+PSMC3BLKR5                        00000005
+PSMC3BLKR6                        00000006
+PSMC3BLKR7                        00000007
+PSMC3BLNK                         00000ED7
+PSMC3CLK                          00000ED4
+PSMC3CON                          00000ED1
+PSMC3DBF                          00000EEA
+PSMC3DBF0                         00000000
+PSMC3DBF1                         00000001
+PSMC3DBF2                         00000002
+PSMC3DBF3                         00000003
+PSMC3DBF4                         00000004
+PSMC3DBF5                         00000005
+PSMC3DBF6                         00000006
+PSMC3DBF7                         00000007
+PSMC3DBR                          00000EE9
+PSMC3DBR0                         00000000
+PSMC3DBR1                         00000001
+PSMC3DBR2                         00000002
+PSMC3DBR3                         00000003
+PSMC3DBR4                         00000004
+PSMC3DBR5                         00000005
+PSMC3DBR6                         00000006
+PSMC3DBR7                         00000007
+PSMC3DC                           00000EE3
+PSMC3DC0                          00000000
+PSMC3DC1                          00000001
+PSMC3DC10                         00000002
+PSMC3DC11                         00000003
+PSMC3DC12                         00000004
+PSMC3DC13                         00000005
+PSMC3DC14                         00000006
+PSMC3DC15                         00000007
+PSMC3DC2                          00000002
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 46
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC3DC3                          00000003
+PSMC3DC4                          00000004
+PSMC3DC5                          00000005
+PSMC3DC6                          00000006
+PSMC3DC7                          00000007
+PSMC3DC8                          00000000
+PSMC3DC9                          00000001
+PSMC3DCH                          00000EE4
+PSMC3DCL                          00000EE3
+PSMC3DCS                          00000EDB
+PSMC3EN                           00000007
+PSMC3FEBS                         00000ED9
+PSMC3FFA                          00000EED
+PSMC3FFA0                         00000000
+PSMC3FFA1                         00000001
+PSMC3FFA2                         00000002
+PSMC3FFA3                         00000003
+PSMC3INT                          00000EE0
+PSMC3LD                           00000006
+PSMC3MDL                          00000ED2
+PSMC3OEN                          00000ED5
+PSMC3PH                           00000EE1
+PSMC3PH0                          00000000
+PSMC3PH1                          00000001
+PSMC3PH10                         00000002
+PSMC3PH11                         00000003
+PSMC3PH12                         00000004
+PSMC3PH13                         00000005
+PSMC3PH14                         00000006
+PSMC3PH15                         00000007
+PSMC3PH2                          00000002
+PSMC3PH3                          00000003
+PSMC3PH4                          00000004
+PSMC3PH5                          00000005
+PSMC3PH6                          00000006
+PSMC3PH7                          00000007
+PSMC3PH8                          00000000
+PSMC3PH9                          00000001
+PSMC3PHH                          00000EE2
+PSMC3PHL                          00000EE1
+PSMC3PHS                          00000EDA
+PSMC3POL                          00000ED6
+PSMC3PR                           00000EE5
+PSMC3PR0                          00000000
+PSMC3PR1                          00000001
+PSMC3PR10                         00000002
+PSMC3PR11                         00000003
+PSMC3PR12                         00000004
+PSMC3PR13                         00000005
+PSMC3PR14                         00000006
+PSMC3PR15                         00000007
+PSMC3PR2                          00000002
+PSMC3PR3                          00000003
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 47
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC3PR4                          00000004
+PSMC3PR5                          00000005
+PSMC3PR6                          00000006
+PSMC3PR7                          00000007
+PSMC3PR8                          00000000
+PSMC3PR9                          00000001
+PSMC3PRH                          00000EE6
+PSMC3PRL                          00000EE5
+PSMC3PRS                          00000EDC
+PSMC3REBS                         00000ED8
+PSMC3SIE                          00000002
+PSMC3SIF                          00000002
+PSMC3STR0                         00000EEE
+PSMC3STR1                         00000EEF
+PSMC3SYNC                         00000ED3
+PSMC3TIE                          00000006
+PSMC3TIF                          00000006
+PSMC3TMR                          00000EE7
+PSMC3TMR0                         00000000
+PSMC3TMR1                         00000001
+PSMC3TMR10                        00000002
+PSMC3TMR11                        00000003
+PSMC3TMR12                        00000004
+PSMC3TMR13                        00000005
+PSMC3TMR14                        00000006
+PSMC3TMR15                        00000007
+PSMC3TMR2                         00000002
+PSMC3TMR3                         00000003
+PSMC3TMR4                         00000004
+PSMC3TMR5                         00000005
+PSMC3TMR6                         00000006
+PSMC3TMR7                         00000007
+PSMC3TMR8                         00000000
+PSMC3TMR9                         00000001
+PSMC3TMRH                         00000EE8
+PSMC3TMRL                         00000EE7
+PSMC4ASDC                         00000F1D
+PSMC4ASDL                         00000F1E
+PSMC4ASDS                         00000F1F
+PSMC4BLKF                         00000F2C
+PSMC4BLKF0                        00000000
+PSMC4BLKF1                        00000001
+PSMC4BLKF2                        00000002
+PSMC4BLKF3                        00000003
+PSMC4BLKF4                        00000004
+PSMC4BLKF5                        00000005
+PSMC4BLKF6                        00000006
+PSMC4BLKF7                        00000007
+PSMC4BLKR                         00000F2B
+PSMC4BLKR0                        00000000
+PSMC4BLKR1                        00000001
+PSMC4BLKR2                        00000002
+PSMC4BLKR3                        00000003
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 48
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC4BLKR4                        00000004
+PSMC4BLKR5                        00000005
+PSMC4BLKR6                        00000006
+PSMC4BLKR7                        00000007
+PSMC4BLNK                         00000F17
+PSMC4CLK                          00000F14
+PSMC4CON                          00000F11
+PSMC4DBF                          00000F2A
+PSMC4DBF0                         00000000
+PSMC4DBF1                         00000001
+PSMC4DBF2                         00000002
+PSMC4DBF3                         00000003
+PSMC4DBF4                         00000004
+PSMC4DBF5                         00000005
+PSMC4DBF6                         00000006
+PSMC4DBF7                         00000007
+PSMC4DBR                          00000F29
+PSMC4DBR0                         00000000
+PSMC4DBR1                         00000001
+PSMC4DBR2                         00000002
+PSMC4DBR3                         00000003
+PSMC4DBR4                         00000004
+PSMC4DBR5                         00000005
+PSMC4DBR6                         00000006
+PSMC4DBR7                         00000007
+PSMC4DC                           00000F23
+PSMC4DC0                          00000000
+PSMC4DC1                          00000001
+PSMC4DC10                         00000002
+PSMC4DC11                         00000003
+PSMC4DC12                         00000004
+PSMC4DC13                         00000005
+PSMC4DC14                         00000006
+PSMC4DC15                         00000007
+PSMC4DC2                          00000002
+PSMC4DC3                          00000003
+PSMC4DC4                          00000004
+PSMC4DC5                          00000005
+PSMC4DC6                          00000006
+PSMC4DC7                          00000007
+PSMC4DC8                          00000000
+PSMC4DC9                          00000001
+PSMC4DCH                          00000F24
+PSMC4DCL                          00000F23
+PSMC4DCS                          00000F1B
+PSMC4EN                           00000007
+PSMC4FEBS                         00000F19
+PSMC4FFA                          00000F2D
+PSMC4FFA0                         00000000
+PSMC4FFA1                         00000001
+PSMC4FFA2                         00000002
+PSMC4FFA3                         00000003
+PSMC4INT                          00000F20
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 49
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC4LD                           00000006
+PSMC4MDL                          00000F12
+PSMC4OEN                          00000F15
+PSMC4PH                           00000F21
+PSMC4PH0                          00000000
+PSMC4PH1                          00000001
+PSMC4PH10                         00000002
+PSMC4PH11                         00000003
+PSMC4PH12                         00000004
+PSMC4PH13                         00000005
+PSMC4PH14                         00000006
+PSMC4PH15                         00000007
+PSMC4PH2                          00000002
+PSMC4PH3                          00000003
+PSMC4PH4                          00000004
+PSMC4PH5                          00000005
+PSMC4PH6                          00000006
+PSMC4PH7                          00000007
+PSMC4PH8                          00000000
+PSMC4PH9                          00000001
+PSMC4PHH                          00000F22
+PSMC4PHL                          00000F21
+PSMC4PHS                          00000F1A
+PSMC4POL                          00000F16
+PSMC4PR                           00000F25
+PSMC4PR0                          00000000
+PSMC4PR1                          00000001
+PSMC4PR10                         00000002
+PSMC4PR11                         00000003
+PSMC4PR12                         00000004
+PSMC4PR13                         00000005
+PSMC4PR14                         00000006
+PSMC4PR15                         00000007
+PSMC4PR2                          00000002
+PSMC4PR3                          00000003
+PSMC4PR4                          00000004
+PSMC4PR5                          00000005
+PSMC4PR6                          00000006
+PSMC4PR7                          00000007
+PSMC4PR8                          00000000
+PSMC4PR9                          00000001
+PSMC4PRH                          00000F26
+PSMC4PRL                          00000F25
+PSMC4PRS                          00000F1C
+PSMC4REBS                         00000F18
+PSMC4SIE                          00000003
+PSMC4SIF                          00000003
+PSMC4STR0                         00000F2E
+PSMC4STR1                         00000F2F
+PSMC4SYNC                         00000F13
+PSMC4TIE                          00000007
+PSMC4TIF                          00000007
+PSMC4TMR                          00000F27
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 50
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC4TMR0                         00000000
+PSMC4TMR1                         00000001
+PSMC4TMR10                        00000002
+PSMC4TMR11                        00000003
+PSMC4TMR12                        00000004
+PSMC4TMR13                        00000005
+PSMC4TMR14                        00000006
+PSMC4TMR15                        00000007
+PSMC4TMR2                         00000002
+PSMC4TMR3                         00000003
+PSMC4TMR4                         00000004
+PSMC4TMR5                         00000005
+PSMC4TMR6                         00000006
+PSMC4TMR7                         00000007
+PSMC4TMR8                         00000000
+PSMC4TMR9                         00000001
+PSMC4TMRH                         00000F28
+PSMC4TMRL                         00000F27
+RA0                               00000000
+RA1                               00000001
+RA2                               00000002
+RA3                               00000003
+RA4                               00000004
+RA5                               00000005
+RA6                               00000006
+RA7                               00000007
+RB0                               00000000
+RB1                               00000001
+RB2                               00000002
+RB3                               00000003
+RB4                               00000004
+RB5                               00000005
+RB6                               00000006
+RB7                               00000007
+RC0                               00000000
+RC1                               00000001
+RC1REG                            00000199
+RC1STA                            0000019D
+RC2                               00000002
+RC3                               00000003
+RC4                               00000004
+RC5                               00000005
+RC6                               00000006
+RC7                               00000007
+RCEN                              00000003
+RCIDL                             00000006
+RCIE                              00000005
+RCIF                              00000005
+RCREG                             00000199
+RCREG1                            00000199
+RCSTA                             0000019D
+RCSTA1                            0000019D
+RD                                00000000
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 51
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+RE3                               00000003
+REVERSE_COUNT                     0000002E
+RIGHT_MOTOR_FORWARD               00000092
+RIGHT_MOTOR_REVERSE               00000095
+RIGHT_MOTOR_STOP                  00000098
+RSEN                              00000001
+RX9                               00000006
+RX9D                              00000000
+RXSEL                             00000001
+R_MOTOR_COUNT                     00000028
+R_MOTOR_STATUS                    0000002A
+R_NOT_W                           00000002
+S                                 00000003
+SAVE_I2C_DATA                     00000061
+SBCDE                             00000002
+SBOREN                            00000007
+SCIE                              00000005
+SCKP                              00000004
+SCKSEL                            00000004
+SCS0                              00000000
+SCS1                              00000001
+SDAHT                             00000003
+SDISEL                            00000003
+SDOSEL                            00000005
+SECOND_DATA_BYTE                  0000003D
+SEN                               00000000
+SENDB                             00000003
+SETUP                             00000005
+SET_DRIVE_STATE                   000000AA
+SET_DRIVE_STATE_END               0000012B
+SLRCONA                           0000030C
+SLRCONA0                          00000000
+SLRCONA1                          00000001
+SLRCONA2                          00000002
+SLRCONA3                          00000003
+SLRCONA4                          00000004
+SLRCONA5                          00000005
+SLRCONA6                          00000006
+SLRCONA7                          00000007
+SLRCONB                           0000030D
+SLRCONB0                          00000000
+SLRCONB1                          00000001
+SLRCONB2                          00000002
+SLRCONB3                          00000003
+SLRCONB4                          00000004
+SLRCONB5                          00000005
+SLRCONB6                          00000006
+SLRCONB7                          00000007
+SLRCONC                           0000030E
+SLRCONC0                          00000000
+SLRCONC1                          00000001
+SLRCONC2                          00000002
+SLRCONC3                          00000003
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 52
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+SLRCONC4                          00000004
+SLRCONC5                          00000005
+SLRCONC6                          00000006
+SLRCONC7                          00000007
+SMP                               00000007
+SP                                00000006
+SP1BRG                            0000019B
+SP1BRGH                           0000019C
+SP1BRGL                           0000019B
+SPBRG                             0000019B
+SPBRG1                            0000019B
+SPBRGH                            0000019C
+SPBRGH1                           0000019C
+SPBRGL                            0000019B
+SPEN                              00000007
+SPLLEN                            00000007
+SREN                              00000005
+SSP1ADD                           00000212
+SSP1ADD0                          00000000
+SSP1ADD1                          00000001
+SSP1ADD2                          00000002
+SSP1ADD3                          00000003
+SSP1ADD4                          00000004
+SSP1ADD5                          00000005
+SSP1ADD6                          00000006
+SSP1ADD7                          00000007
+SSP1BUF                           00000211
+SSP1BUF0                          00000000
+SSP1BUF1                          00000001
+SSP1BUF2                          00000002
+SSP1BUF3                          00000003
+SSP1BUF4                          00000004
+SSP1BUF5                          00000005
+SSP1BUF6                          00000006
+SSP1BUF7                          00000007
+SSP1CON                           00000215
+SSP1CON1                          00000215
+SSP1CON2                          00000216
+SSP1CON3                          00000217
+SSP1IE                            00000003
+SSP1IF                            00000003
+SSP1MSK                           00000213
+SSP1MSK0                          00000000
+SSP1MSK1                          00000001
+SSP1MSK2                          00000002
+SSP1MSK3                          00000003
+SSP1MSK4                          00000004
+SSP1MSK5                          00000005
+SSP1MSK6                          00000006
+SSP1MSK7                          00000007
+SSP1STAT                          00000214
+SSPADD                            00000212
+SSPBUF                            00000211
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 53
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+SSPCON                            00000215
+SSPCON1                           00000215
+SSPCON2                           00000216
+SSPCON3                           00000217
+SSPEN                             00000005
+SSPM0                             00000000
+SSPM1                             00000001
+SSPM2                             00000002
+SSPM3                             00000003
+SSPMSK                            00000213
+SSPOV                             00000006
+SSPSTAT                           00000214
+STATUS                            00000003
+STATUS_SHAD                       00000FE4
+STKOVF                            00000007
+STKPTR                            00000FED
+STKUNF                            00000006
+STOP_COUNT                        0000002D
+SWDTEN                            00000000
+SYNC                              00000004
+T0CS                              00000005
+T0IE                              00000005
+T0IF                              00000002
+T0SE                              00000004
+T1CKPS0                           00000004
+T1CKPS1                           00000005
+T1CON                             00000018
+T1GCON                            00000019
+T1GGO                             00000003
+T1GPOL                            00000006
+T1GSPM                            00000004
+T1GSS0                            00000000
+T1GSS1                            00000001
+T1GTM                             00000005
+T1GVAL                            00000002
+T1OSCEN                           00000003
+T1OSCR                            00000007
+T20MS_COUNT_1                     00000027
+T20MS_COUNT_2                     00000026
+T20MS_NOT_PASSED                  00000038
+T2CKPS0                           00000000
+T2CKPS1                           00000001
+T2CON                             0000001C
+T2OUTPS0                          00000003
+T2OUTPS1                          00000004
+T2OUTPS2                          00000005
+T2OUTPS3                          00000006
+THIRD_DATA_BYTE                   00000042
+TMR0                              00000015
+TMR0CS                            00000005
+TMR0IE                            00000005
+TMR0IF                            00000002
+TMR0SE                            00000004
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 54
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TMR1                              00000016
+TMR1CS0                           00000006
+TMR1CS1                           00000007
+TMR1GE                            00000007
+TMR1GIE                           00000007
+TMR1GIF                           00000007
+TMR1H                             00000017
+TMR1IE                            00000000
+TMR1IF                            00000000
+TMR1L                             00000016
+TMR1ON                            00000000
+TMR2                              0000001A
+TMR2IE                            00000001
+TMR2IF                            00000001
+TMR2ON                            00000002
+TMR2_INTERRUPT                    00000018
+TMR2_INTERRUPT_END                00000047
+TOSH                              00000FEF
+TOSL                              00000FEE
+TRIGSEL0                          00000004
+TRIGSEL1                          00000005
+TRIGSEL2                          00000006
+TRIGSEL3                          00000007
+TRISA                             0000008C
+TRISA0                            00000000
+TRISA1                            00000001
+TRISA2                            00000002
+TRISA3                            00000003
+TRISA4                            00000004
+TRISA5                            00000005
+TRISA6                            00000006
+TRISA7                            00000007
+TRISB                             0000008D
+TRISB0                            00000000
+TRISB1                            00000001
+TRISB2                            00000002
+TRISB3                            00000003
+TRISB4                            00000004
+TRISB5                            00000005
+TRISB6                            00000006
+TRISB7                            00000007
+TRISC                             0000008E
+TRISC0                            00000000
+TRISC1                            00000001
+TRISC2                            00000002
+TRISC3                            00000003
+TRISC4                            00000004
+TRISC5                            00000005
+TRISC6                            00000006
+TRISC7                            00000007
+TRISE                             00000090
+TRISE3                            00000003
+TRMT                              00000001
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 55
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TSEN                              00000005
+TSRNG                             00000004
+TUN0                              00000000
+TUN1                              00000001
+TUN2                              00000002
+TUN3                              00000003
+TUN4                              00000004
+TUN5                              00000005
+TURN_LEFT_F                       00000111
+TURN_LEFT_R                       00000123
+TURN_RIGHT_F                      00000108
+TURN_RIGHT_R                      0000011A
+TX1REG                            0000019A
+TX1STA                            0000019E
+TX9                               00000006
+TX9D                              00000000
+TXEN                              00000005
+TXIE                              00000004
+TXIF                              00000004
+TXREG                             0000019A
+TXREG1                            0000019A
+TXSEL                             00000002
+TXSTA                             0000019E
+TXSTA1                            0000019E
+UA                                00000001
+UPDATE_DRIVE_STATUS               0000005A
+UPPER_THRESHOLD                   00000030
+VREGCON                           00000197
+VREGPM                            00000001
+W                                 00000000
+WCOL                              00000007
+WDTCON                            00000097
+WDTPS0                            00000001
+WDTPS1                            00000002
+WDTPS2                            00000003
+WDTPS3                            00000004
+WDTPS4                            00000005
+WPUA                              0000020C
+WPUA0                             00000000
+WPUA1                             00000001
+WPUA2                             00000002
+WPUA3                             00000003
+WPUA4                             00000004
+WPUA5                             00000005
+WPUA6                             00000006
+WPUA7                             00000007
+WPUB                              0000020D
+WPUB0                             00000000
+WPUB1                             00000001
+WPUB2                             00000002
+WPUB3                             00000003
+WPUB4                             00000004
+WPUB5                             00000005
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 56
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+WPUB6                             00000006
+WPUB7                             00000007
+WPUC                              0000020E
+WPUC0                             00000000
+WPUC1                             00000001
+WPUC2                             00000002
+WPUC3                             00000003
+WPUC4                             00000004
+WPUC5                             00000005
+WPUC6                             00000006
+WPUC7                             00000007
+WPUE                              00000210
+WPUE3                             00000003
+WR                                00000001
+WREG                              00000009
+WREG_SHAD                         00000FE5
+WREN                              00000002
+WRERR                             00000003
+WUE                               00000001
+Z                                 00000002
+Z_P_TURN_LEFT                     000000FF
+Z_P_TURN_RIGHT                    000000F6
+Z_SHAD                            00000002
+_BOREN_NSLEEP                     00003DFF
+_BOREN_OFF                        000039FF
+_BOREN_ON                         00003FFF
+_BOREN_SBODEN                     00003BFF
+_BORV_HI                          00003BFF
+_BORV_LO                          00003FFF
+_CLKOUTEN_OFF                     00003FFF
+_CLKOUTEN_ON                      000037FF
+_CONFIG1                          00008007
+_CONFIG2                          00008008
+_CPD_OFF                          00003FFF
+_CPD_ON                           00003EFF
+_CP_OFF                           00003FFF
+_CP_ON                            00003F7F
+_DEVID1                           00008006
+_FCMEN_OFF                        00001FFF
+_FCMEN_ON                         00003FFF
+_FOSC_ECH                         00003FFF
+_FOSC_ECL                         00003FFD
+_FOSC_ECM                         00003FFE
+_FOSC_EXTRC                       00003FFB
+_FOSC_HS                          00003FFA
+_FOSC_INTOSC                      00003FFC
+_FOSC_LP                          00003FF8
+_FOSC_XT                          00003FF9
+_IDLOC0                           00008000
+_IDLOC1                           00008001
+_IDLOC2                           00008002
+_IDLOC3                           00008003
+_IESO_OFF                         00002FFF
+MPASM 5.84         UNV_TDRIVE_SLAVE_MAIN.ASM   4-8-2026  14:12:24         PAGE 57
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+_IESO_ON                          00003FFF
+_LPBOR_OFF                        00003FFF
+_LPBOR_ON                         000037FF
+_LVP_OFF                          00001FFF
+_LVP_ON                           00003FFF
+_MCLRE_OFF                        00003FBF
+_MCLRE_ON                         00003FFF
+_PLLEN_OFF                        00003EFF
+_PLLEN_ON                         00003FFF
+_PWRTE_OFF                        00003FFF
+_PWRTE_ON                         00003FDF
+_STVREN_OFF                       00003DFF
+_STVREN_ON                        00003FFF
+_VCAPEN_OFF                       00003FFF
+_VCAPEN_ON                        00003FDF
+_WDTE_NSLEEP                      00003FF7
+_WDTE_OFF                         00003FE7
+_WDTE_ON                          00003FFF
+_WDTE_SWDTEN                      00003FEF
+_WRT_ALL                          00003FFC
+_WRT_BOOT                         00003FFE
+_WRT_HALF                         00003FFD
+_WRT_OFF                          00003FFF
+__16F1788                         00000001
+
+Errors   :     0
+Warnings :     0 reported,     0 suppressed
+Messages :    55 reported,     0 suppressed
+
+

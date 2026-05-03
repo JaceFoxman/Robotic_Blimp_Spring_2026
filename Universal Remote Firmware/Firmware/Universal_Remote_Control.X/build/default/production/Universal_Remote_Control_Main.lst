@@ -1,0 +1,3423 @@
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE  1
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00001 ;****************************************************************************
+                      00002 ;                                                                           *
+                      00003 ;           File Name: Universal_Remote_Control_Main.asm                    *
+                      00004 ;           Date: 11/21/24                                                  *
+                      00005 ;           File Version: 1                                                 *
+                      00006 ;           Author:    Zac Christensen                                      *
+                      00007 ;           Company:   Idaho State Univerisy; RCET                          *
+                      00008 ;           Description:Firmware For Universal Remote Controller            *
+                      00009 ;                                                                           *
+                      00010 ;****************************************************************************
+                      00011 ;                                                                           *
+                      00012 ;           Revision History:                                               *
+                      00013 ;     1.Added Timer 2 Interrupt Delay to Occur Every 0.5S; 11/21/24         *
+                      00014 ;     2.Added UART COM Functions include File; 11/22/24                     *
+                      00015 ;     3.Added Button Check and Update Button Data; 11/24/24                 *
+                      00016 ;     4.Added ADC Interrupt and Single Channel Read; 11/24/24               *
+                      00017 ;     5.Added ADC For all Other Channels; 11/24/24                          *
+                      00018 ;                                                                           *
+                      00019 ;****************************************************************************
+                      00020     
+                      00021 #INCLUDE <p16lf1789.inc>                                ; processor specific variable definitions
+                      00001         LIST
+                      00002 
+                      00003 ;==========================================================================
+                      00004 ; Build date : Oct 24 2019
+                      00005 ;  MPASM PIC16LF1789 processor include
+                      00006 ; 
+                      00007 ;  (c) Copyright 1999-2019 Microchip Technology, All rights reserved
+                      00008 ;==========================================================================
+                      00009 
+                      03185         LIST
+                      00022 #INCLUDE <URC_PIC16LF1789_Set_Up.inc>                   ;Set Up Proccesor Functions
+                      00001 ;****************************************************************************
+                      00002 ;                                                                           *
+                      00003 ;           File Name: URC_PIC16LF1789_Set_Up.inc                           *
+                      00004 ;           Date: 11/21/24                                                  *
+                      00005 ;           File Version: 1                                                 *
+                      00006 ;           Author:    Zac Christensen                                      *
+                      00007 ;           Company:   Idaho State Univerisy; RCET                          *
+                      00008 ;           Description:  Firmware Setup for PIC16f1789                     *
+                      00009 ;                                                                           *
+                      00010 ;****************************************************************************
+                      00011 ;                                                                           *
+                      00012 ;           Revision History:                                               *
+                      00013 ;       1.Set Up Internal Oscillator; 11/21/24                              *
+                      00014 ;       2.Set Up Port Inputs and Outputs according to PCB Layout; 11/21/24  *
+                      00015 ;       3.Set Up USART COM; 11/21/24                                        *
+                      00016 ;       4.Added GPRs for Buttons and Joystick Data; 11/21/24                *
+                      00017 ;       5.Added GPRs for Transmission Data; 11/22/24                        *
+                      00018 ;       6.Set Up ADC Module; 11/24/24                                       *
+                      00019 ;       7.Added GPRs for Analog Selection Channels; 11/24/24                *
+                      00020 ;       8.                                                                  *
+                      00021 ;       9.                                                                  *
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE  2
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00022 ;       10.                                                                 *
+                      00023 ;                                                                           *
+                      00024 ;****************************************************************************
+                      00025     
+                      00026 ;******************************************             
+                      00027 ;Define Constants
+                      00028 ;******************************************
+                      00029 #Define         BAUD            D'100'                  ;Desired Baud Rate in Kbps for I2C
+                      00030 #Define         FOSC            D'16000'                ;Oscillator Clock in KHz This must be filled
+                      00031     
+                      00032 ;******************************************             
+                      00033 ;Define Variable Registers
+                      00034 ;******************************************
+  00000020            00035 TIMERCOUNT          EQU         0X20        ;Register to Slow Timer 2 to 0.5s Interrupts
+  00000021            00036 ROBOT_ADDR          EQU         0X21        ;Register for Saving the Robot Address
+  00000022            00037 JOY_1_CMND          EQU         0X22        ;Register for Saving the First Joystick Data Packet Command
+  00000023            00038 JOY_2_CMND          EQU         0X23        ;Register for Saving the Second Joystick Data Packet Command
+  00000024            00039 BUTTONS_CMND        EQU         0X24        ;Register for Saving the Buttons Data Packet Command
+                      00040 ;*******Button and Joysick Save Data Variables*********************************************************
+  00000025            00041 JOYSTICK_1_UD       EQU         0X25        ;Save High Byte of Left Joystick Up Down Data
+  00000026            00042 JOYSTICK_1_LR       EQU         0X26        ;Save High Byte of Left Joystick Left Right Data
+  00000027            00043 JOYSTICK_2_UD       EQU         0X27        ;Save High Byte of Right Lower Joystick Up Down Data
+  00000028            00044 JOYSTICK_2_LR       EQU         0X28        ;Save High Byte of Right Lower Joystick Left Right Data
+  00000029            00045 JOYSTICK_3_UD       EQU         0X29        ;Save High Byte of Right Upper Joystick Up Down Data
+  0000002A            00046 JOYSTICK_3_LR       EQU         0X2A        ;Save High Byte of Right Upper Joystick Left Right Data
+  0000002B            00047 BUTTON_DATA_1       EQU         0X2B        ;Save Button Conditions for first 8 Buttons
+  0000002C            00048 BUTTON_DATA_2       EQU         0X2C        ;Save Button Condition for the 9th Button
+                      00049 ;*******Transmission Variables********************************************************
+  0000002D            00050 TX_HANDSHAKE        EQU         0X2D        ;Register to Store the Handshake Character: $ (0x24)
+  0000002E            00051 TX_ADDR             EQU         0X2E        ;Register to Store the Robot Address Used in Tranmission
+  0000002F            00052 TX_CMND             EQU         0X2F        ;Register to Store the Command Used in Transmission
+  00000030            00053 TX_DATA_1           EQU         0X30        ;Register to Store the First Data Byte in Transmission Packe
+                            t
+  00000031            00054 TX_DATA_2           EQU         0X31        ;Register to Store the Second Data Byte in Transmission Pack
+                            et
+  00000032            00055 TX_DATA_3           EQU         0X32        ;Register to Store the Third Data Byte in Transmission Packe
+                            t
+  00000033            00056 TX_COUNT            EQU         0X33        ;Register to Track Which Data Packet Should be Sent
+                      00057 ;********ADC Channel Variables**************************************************************************
+                            *
+  00000034            00058 ANCH0               EQU         0X34        ;JOY1 UD\     
+  00000035            00059 ANCH1               EQU         0X35        ;JOY1 LR \     
+  00000036            00060 ANCH2               EQU         0X36        ;JOY2 UD  \ 
+  00000037            00061 ANCH3               EQU         0X37        ;JOY2 LR   | Variables Used to Change the Analog Channel Sel
+                            ection While Saving Result Formatting
+  00000038            00062 ANCH4               EQU         0X38        ;JOY3 UD  / 
+  00000039            00063 ANCH5               EQU         0X39        ;JOY3 LR /  
+  0000003A            00064 ANCH_COUNT          EQU         0X3A        ;Keep Track of Which Analog Channel is Active
+                      00065                     
+                      00066 ;******************************************             
+                      00067 ;Start of Setup File Code
+                      00068 ;******************************************
+                      00069 SETUP_CODE CODE
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE  3
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00070  
+0000                  00071 INITIALIZE
+                      00072 ;*** GPR SETUP **********
+                      00073  ;*All General Purpose Registers In Bank 0***************
+0000   0020           00074  BANKSEL        TIMERCOUNT
+0001   301F           00075  MOVLW          D'31'
+0002   00A0           00076  MOVWF          TIMERCOUNT          ;Timer 2 Set to 0.5s Code.  (16.32mS * 31 = 0.505S)
+                      00077  
+0003   01A1           00078  CLRF           ROBOT_ADDR          ;Clear Robot Address on Start UP
+                      00079  
+0004   304A           00080  MOVLW          H'4A'
+0005   00A2           00081  MOVWF          JOY_1_CMND          ;Command Byte to Indicate the First set of Joystick Data Bytes; ASCI
+                            I: J
+                      00082  
+0006   306A           00083  MOVLW          H'6A'
+0007   00A3           00084  MOVWF          JOY_2_CMND          ;Command Byte to Indicate the Second Set of Joystick Data Bytes; ASC
+                            II: j
+                      00085  
+0008   3042           00086  MOVLW          H'42'
+0009   00A4           00087  MOVWF          BUTTONS_CMND        ;Command Byte to Indicate the Buttons Data Bytes; ASCII: B
+                      00088  
+000A   3024           00089  MOVLW          H'24'
+000B   00AD           00090  MOVWF          TX_HANDSHAKE        ;Store the Handshake Byte of ASCII $
+                      00091  
+000C   01B3           00092  CLRF           TX_COUNT            ;Initialize with the First Data Packet to be sent (Joystick 1)
+                      00093  
+000D   01A5           00094  CLRF           JOYSTICK_1_UD
+                      00095  
+000E   01A6           00096  CLRF           JOYSTICK_1_LR
+                      00097  
+000F   01A7           00098  CLRF           JOYSTICK_2_UD
+                      00099  
+0010   01A8           00100  CLRF           JOYSTICK_2_LR
+                      00101  
+0011   01A9           00102  CLRF           JOYSTICK_3_UD
+                      00103  
+0012   01AA           00104  CLRF           JOYSTICK_3_LR
+                      00105  
+0013   01AB           00106  CLRF           BUTTON_DATA_1
+                      00107  
+0014   01AC           00108  CLRF           BUTTON_DATA_2           ;Initialize With Alll Data Bytes as 0
+                      00109  
+0015   01BA           00110  CLRF           ANCH_COUNT              ;Start With Analog Channel 0 (Joystick 1 UD)
+                      00111  
+0016   3081           00112  MOVLW          H'81'
+0017   00B4           00113  MOVWF          ANCH0                   ;Set Channel 0 with 10 Bit Resolution and Enable ADC (ADCON0)
+                      00114  
+0018   3085           00115  MOVLW          H'85'
+0019   00B5           00116  MOVWF          ANCH1                   ;Set Channel 1 with 10 Bit Resolution and Enable ADC (ADCON0)
+                      00117  
+001A   3089           00118  MOVLW          H'89'
+001B   00B6           00119  MOVWF          ANCH2                   ;Set Channel 2 with 10 Bit Resolution and Enable ADC (ADCON0)
+                      00120  
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE  4
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+001C   308D           00121  MOVLW          H'8D'
+001D   00B7           00122  MOVWF          ANCH3                   ;Set Channel 3 with 10 Bit Resolution and Enable ADC (ADCON0)
+                      00123  
+001E   3091           00124  MOVLW          H'91'
+001F   00B8           00125  MOVWF          ANCH4                   ;Set Channel 4 with 10 Bit Resolution and Enable ADC (ADCON0)
+                      00126  
+0020   3095           00127  MOVLW          H'95'
+0021   00B9           00128  MOVWF          ANCH5                   ;Set Channel 5 with 10 Bit Resolution and Enable ADC (ADCON0)
+                      00129  
+                      00130 ;*** SFR SETUP **********
+                      00131  
+                      00132 ;***Oscillator Set up****
+0022   0021           00133     BANKSEL     OSCCON
+0023   30FB           00134     MOVLW       H'FB'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0024   0099           00135     MOVWF       OSCCON                  ;Set Internal Oscilator to 16Mhz
+                      00136 
+0025   002A           00137     BANKSEL     CLKRCON
+0026   3000           00138     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0027   009A           00139     MOVWF       CLKRCON                 ;Disable Output CLock Reference
+                      00140  
+                      00141 ;*** SET OPTION_REG: ****
+0028   0021           00142     BANKSEL     OPTION_REG
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0029   0195           00143     CLRF        OPTION_REG              ;Weak Pull Up Disabled, Interrupt Edge Selection, Timer Clock Se
+                            t-Up
+                      00144     
+                      00145 ;*** SET CCPXCON REG: **
+002A   0025           00146     BANKSEL     CCP1CON
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+002B   0193           00147     CLRF        CCP1CON                 ;DISABLE PWM & CCP
+                      00148     
+002C   0025           00149     BANKSEL     CCP2CON
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+002D   019A           00150     CLRF        CCP2CON
+                      00151     
+002E   0026           00152     BANKSEL     CCP3CON
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+002F   0193           00153     CLRF        CCP3CON
+                      00154 ;*** TIMER 1 SETUP *****
+0030   0020           00155     BANKSEL     T1CON
+0031   0198           00156     CLRF        T1CON                   ;DISABLE TIMER 1
+                      00157     
+                      00158 ;*** TIMER 2 SETUP *****
+0032   0020           00159     BANKSEL     T2CON
+0033   307A           00160     MOVLW       H'7A'                   ;Sets Prescaler and Postscaler to 1:16 (Wait to enable timer)
+0034   009C           00161     MOVWF       T2CON
+0035   0020           00162     BANKSEL     PR2             
+0036   30FF           00163     MOVLW       D'255'                  ;Set PR2 count 
+0037   009B           00164     MOVWF       PR2     
+                      00165     
+                      00166 ;*** Alternate Pin Functions ****
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE  5
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0038   0022           00167     BANKSEL     APFCON1
+0039   30F1           00168     MOVLW       H'F1'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+003A   009D           00169     MOVWF       APFCON1                 ;Set Comm on Port C
+                      00170     
+003B   0022           00171     BANKSEL     APFCON2
+003C   3000           00172     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+003D   009C           00173     MOVWF       APFCON2                 ;Set Save/Select on Port A CCP3 on Port E
+                      00174     
+                      00175 ;*** PORT A SETUP ****
+003E   0024           00176     BANKSEL     WPUA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+003F   018C           00177     CLRF        WPUA                    ;Disable Weak Pull Ups
+                      00178     
+0040   0025           00179     BANKSEL     ODCONA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0041   018C           00180     CLRF        ODCONA                  ;Disable Open Drain
+                      00181     
+0042   0026           00182     BANKSEL     SLRCONA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0043   018C           00183     CLRF        SLRCONA                 ;Disable Slew Rate Limit
+                      00184     
+0044   0027           00185     BANKSEL     INLVLA
+0045   30FF           00186     MOVLW       H'FF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0046   008C           00187     MOVWF       INLVLA                  ;Set Input Threshold Voltage to CMOS Levels
+                      00188     
+0047   0022           00189     BANKSEL     LATA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0048   018C           00190     CLRF        LATA                    ;Clear Input Latches
+                      00191     
+0049   0021           00192     BANKSEL     TRISA
+004A   30FF           00193     MOVLW       H'FF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+004B   008C           00194     MOVWF       TRISA                   ;SET Port A as Input
+                      00195     
+004C   0023           00196     BANKSEL     ANSELA
+004D   302F           00197     MOVLW       H'2F'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+004E   008C           00198     MOVWF       ANSELA                  ;Enable Analog Input on RA0(CH0), RA1(CH1), RA2(CH2), RA3(CH3), 
+                            and RA5(CH4)
+                      00199     
+                      00200 ;*** PORT B SETUP **** 
+004F   0024           00201     BANKSEL     WPUB
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0050   018D           00202     CLRF        WPUB                    ;Disable Weak Pull Ups
+                      00203     
+0051   0025           00204     BANKSEL     ODCONB
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0052   018D           00205     CLRF        ODCONB                  ;Disable Open Drain
+                      00206     
+0053   0026           00207     BANKSEL     SLRCONB
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE  6
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0054   018D           00208     CLRF        SLRCONB                 ;Disable Slew Rate Limit
+                      00209     
+0055   0027           00210     BANKSEL     INLVLB
+0056   30FF           00211     MOVLW       H'FF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0057   008D           00212     MOVWF       INLVLB                  ;Set Input Threshold Voltage to CMOS Levels
+                      00213     
+0058   0022           00214     BANKSEL     LATB
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0059   018D           00215     CLRF        LATB                    ;Clear Input Latches
+                      00216     
+005A   0021           00217     BANKSEL     TRISB
+005B   30FF           00218     MOVLW       H'FF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+005C   008D           00219     MOVWF       TRISB                   ;SET Port B as Input
+                      00220     
+005D   0023           00221     BANKSEL     ANSELB
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+005E   018D           00222     CLRF        ANSELB                  ;Disable Analog Input
+                      00223     
+                      00224 ;*** PORT C SETUP **** 
+005F   0024           00225     BANKSEL     WPUC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0060   018E           00226     CLRF        WPUC                    ;Disable Weak Pull Ups
+                      00227     
+0061   0025           00228     BANKSEL     ODCONC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0062   018E           00229     CLRF        ODCONC                  ;Disable Open Drain
+                      00230     
+0063   0026           00231     BANKSEL     SLRCONC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0064   018E           00232     CLRF        SLRCONC                 ;Disable Slew Rate Limit
+                      00233     
+0065   0027           00234     BANKSEL     INLVLC
+0066   30FF           00235     MOVLW       H'FF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0067   008E           00236     MOVWF       INLVLC                  ;Set Input Threshold Voltage to CMOS Levels
+                      00237     
+0068   0022           00238     BANKSEL     LATC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0069   018E           00239     CLRF        LATC                    ;Clear Input Latches
+                      00240     
+006A   0021           00241     BANKSEL     TRISC
+006B   30BF           00242     MOVLW       H'BF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+006C   008E           00243     MOVWF       TRISC                   ;SET Port C as Input (TX:RC6 as Output)
+                      00244     
+006D   0023           00245     BANKSEL     ANSELC
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+006E   018E           00246     CLRF        ANSELC                  ;Disable Analog Input
+                      00247     
+                      00248     ;*** PORT D SETUP **** 
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE  7
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+006F   0024           00249     BANKSEL     WPUD
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0070   018F           00250     CLRF        WPUD                    ;Disable Weak Pull Ups
+                      00251     
+0071   0025           00252     BANKSEL     ODCOND
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0072   018F           00253     CLRF        ODCOND                  ;Disable Open Drain
+                      00254     
+0073   0026           00255     BANKSEL     SLRCOND
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0074   018F           00256     CLRF        SLRCOND                 ;Disable Slew Rate Limit
+                      00257     
+0075   0027           00258     BANKSEL     INLVLD
+0076   30FF           00259     MOVLW       H'FF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0077   008F           00260     MOVWF       INLVLD                  ;Set Input Threshold Voltage to CMOS Levels
+                      00261     
+0078   0022           00262     BANKSEL     LATD
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0079   018F           00263     CLRF        LATD                    ;Clear Input Latches
+                      00264     
+007A   0021           00265     BANKSEL     TRISD
+007B   3000           00266     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+007C   008F           00267     MOVWF       TRISD                   ;SET Port D as Output
+                      00268     
+007D   0023           00269     BANKSEL     ANSELD
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+007E   018F           00270     CLRF        ANSELD                  ;Disable Analog Input
+                      00271     
+                      00272 ;*** PORT E SETUP ****
+007F   0024           00273     BANKSEL     WPUE
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0080   0190           00274     CLRF        WPUE                    ;Disable Weak Pull Ups
+                      00275     
+0081   0025           00276     BANKSEL     ODCONE
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0082   0190           00277     CLRF        ODCONE                  ;Disable Open Drain
+                      00278     
+0083   0026           00279     BANKSEL     SLRCONE
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0084   0190           00280     CLRF        SLRCONE                 ;Disable Slew Rate Limit
+                      00281     
+0085   0027           00282     BANKSEL     INLVLE
+0086   30FF           00283     MOVLW       H'FF'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0087   0090           00284     MOVWF       INLVLE                  ;Set Input Threshold Voltage to CMOS Levels
+                      00285     
+0088   0022           00286     BANKSEL     LATE
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0089   0190           00287     CLRF        LATE                    ;Clear Input Latches
+                      00288     
+008A   0021           00289     BANKSEL     TRISE
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE  8
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+008B   300F           00290     MOVLW       H'0F'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+008C   0090           00291     MOVWF       TRISE                   ;SET Port E 0,1,2  as Input
+                      00292     
+008D   0023           00293     BANKSEL     ANSELE
+008E   3001           00294     MOVLW       H'01'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+008F   0090           00295     MOVWF       ANSELE                  ;Enable Analog Input on RE0(CH5)
+                      00296     
+                      00297 ;*** USART Set-Up  :  *****
+0090   0023           00298     BANKSEL     TXSTA
+0091   3086           00299     MOVLW       H'86'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0092   009E           00300     MOVWF       TXSTA                   ;Async, 8 Bit Tx, No Break Char, BRGH High (Wait On enable)
+                      00301     
+0093   0023           00302     BANKSEL     RCSTA
+0094   3080           00303     MOVLW       H'80'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0095   009D           00304     MOVWF       RCSTA                   ;Serial Port Enable, 8 Bit Rx, Disable Adress Selection (Wait fo
+                            r Cont. Rx Enable)
+                      00305     
+0096   0023           00306     BANKSEL     BAUDCTL
+0097   3048           00307     MOVLW       H'48'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0098   009F           00308     MOVWF       BAUDCTL                 ;Tx Non-Inverted, Baud Rate Gen 16 Bit, Auto Baud Detect Off
+                      00309     
+0099   0023           00310     BANKSEL     SPBRG
+009A   3022           00311     MOVLW       D'34'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+009B   009B           00312     MOVWF       SPBRG                   
+                      00313     
+009C   0023           00314     BANKSEL     SPBRGH
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+009D   019C           00315     CLRF        SPBRGH                  ;Set Baud Rate to 115.2K  ( ((16MHz/115.2K)/4) - 1 = 34 )
+                      00316     
+                      00317 ;*** ADC Set-Up  :   ******
+009E   0021           00318     BANKSEL     ADCON0
+009F   3081           00319     MOVLW       H'81'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+00A0   009D           00320     MOVWF       ADCON0                  ;10 Bit Result, Start With Channel 0, and Enable ADC(Wait On Go)
+                      00321     
+00A1   0021           00322     BANKSEL     ADCON1
+00A2   3050           00323     MOVLW       H'50'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+00A3   009E           00324     MOVWF       ADCON1                  ;Set Signed Magnitude Result, Fosc/16 Conversion Clock, and Pos/
+                            Neg References to VDD/VSS
+                      00325     
+00A4   0021           00326     BANKSEL     ADCON2
+00A5   300F           00327     MOVLW       H'0F'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+00A6   009F           00328     MOVWF       ADCON2                  ;Disable Auto Converion Trigger and Set Negative Refernce to Wha
+                            ts Set in ADCON1
+                      00329     
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE  9
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00330 ;*** Interrupt Set-Up : ****
+00A7   0020           00331     BANKSEL     INTCON
+00A8   3040           00332     MOVLW       H'40'                   ;Enable Peripheral Interrupts (Wait on Global Enable)
+00A9   008B           00333     MOVWF       INTCON
+                      00334     
+00AA   0021           00335     BANKSEL     PIE1
+00AB   3042           00336     MOVLW       H'42'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+00AC   0091           00337     MOVWF       PIE1                    ;Enable Timer 2 and ADC Interrupts
+                      00338  
+00AD   0021           00339     BANKSEL     PIE2
+00AE   3000           00340     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+00AF   0092           00341     MOVWF       PIE2                    ;Disable Interrupts
+                      00342     
+00B0   0021           00343     BANKSEL     PIE3
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+00B1   1213           00344     BCF         PIE3, 4                 ;Disable CCP3 Interrupt
+                      00345     
+00B2   0021           00346     BANKSEL     PIE4
+00B3   3000           00347     MOVLW       H'00'
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+00B4   0094           00348     MOVWF       PIE4                    ;Disable Interrupts
+                      00349     
+                      00350     
+00B5   0008           00351     RETURN                              ;END OF SETUP ROUTINE
+                      00023 #INCLUDE <URC_UART.INC>                                 ;Include File That Contains Transmission Functio
+                            ns
+                      00001 ;****************************************************************************
+                      00002 ;                                                                           *
+                      00003 ;           File Name: URC_UART.inc                                         *
+                      00004 ;           Date: 11/22/24                                                  *
+                      00005 ;           File Version: 1                                                 *
+                      00006 ;           Author:    Zac Christensen                                      *
+                      00007 ;           Company:   Idaho State Univerisy; RCET                          *
+                      00008 ;           Description:  UART Functions for Transmitting Controller State  *
+                      00009 ;                                                                           *
+                      00010 ;****************************************************************************
+                      00011     
+                      00012 UART_CODE   CODE
+                      00013   
+                      00014 ;******************************************************************************************             
+                      00015 ;Sends the Data Packet Containing Handshake, Address, Command, Byte 1, Byte 2, and Byte 3
+                      00016 ;******************************************************************************************
+0000                  00017 SEND_DATA_PACKET
+0000   0023           00018     BANKSEL     TXSTA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0001   1C9E           00019     BTFSS       TXSTA,1
+0002   2???           00020     GOTO        SEND_DATA_PACKET        ;Ensure the Buffer is Empty
+0003   0020           00021     BANKSEL     TX_HANDSHAKE
+0004   082D           00022     MOVFW       TX_HANDSHAKE
+0005   0023           00023     BANKSEL     TXREG
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 10
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0006   009A           00024     MOVWF       TXREG                   ;Load Handshake Byte ($; 0x24)
+0007   0023           00025     BANKSEL     TXSTA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0008   1C9E           00026     BTFSS       TXSTA,1
+0009   2???           00027     GOTO        $-2                     ;Wait Until HandShake TX Completes
+000A   0020           00028     BANKSEL     TX_ADDR
+000B   082E           00029     MOVFW       TX_ADDR
+000C   0023           00030     BANKSEL     TXREG
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+000D   009A           00031     MOVWF       TXREG                   ;Load Robot Address Byte
+000E   0023           00032     BANKSEL     TXSTA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+000F   1C9E           00033     BTFSS       TXSTA,1
+0010   2???           00034     GOTO        $-2                     ;Wait Until Robot Address TX Completes
+0011   0020           00035     BANKSEL     TX_CMND
+0012   082F           00036     MOVFW       TX_CMND
+0013   0023           00037     BANKSEL     TXREG
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0014   009A           00038     MOVWF       TXREG                   ;Load Command Byte
+0015   0023           00039     BANKSEL     TXSTA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0016   1C9E           00040     BTFSS       TXSTA,1
+0017   2???           00041     GOTO        $-2                     ;Wait Until Command Byte TX Completes
+0018   0020           00042     BANKSEL     TX_DATA_1
+0019   0830           00043     MOVFW       TX_DATA_1
+001A   0023           00044     BANKSEL     TXREG
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+001B   009A           00045     MOVWF       TXREG                   ;Load First Data Byte
+001C   0023           00046     BANKSEL     TXSTA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+001D   1C9E           00047     BTFSS       TXSTA,1
+001E   2???           00048     GOTO        $-2                     ;Wait Until First Data TX Completes
+001F   0020           00049     BANKSEL     TX_DATA_2
+0020   0831           00050     MOVFW       TX_DATA_2
+0021   0023           00051     BANKSEL     TXREG
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0022   009A           00052     MOVWF       TXREG                   ;Load Second Data Byte
+0023   0023           00053     BANKSEL     TXSTA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0024   1C9E           00054     BTFSS       TXSTA,1
+0025   2???           00055     GOTO        $-2                     ;Wait Until Seond Data TX Completes
+0026   0020           00056     BANKSEL     TX_DATA_3
+0027   0832           00057     MOVFW       TX_DATA_3
+0028   0023           00058     BANKSEL     TXREG
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0029   009A           00059     MOVWF       TXREG                   ;Load Third Data Byte
+002A   0023           00060     BANKSEL     TXSTA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+002B   1C9E           00061     BTFSS       TXSTA,1
+002C   2???           00062     GOTO        $-2                     ;Wait Until Third Data TX Completes
+002D   0008           00063    RETURN
+                      00064    
+                      00065 ;******************************************************************************************             
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 11
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00066 ;Determine Packet To Be Sent and Call Packet Initialiazation
+                      00067 ;******************************************************************************************
+002E                  00068 DETERMINE_PACKET
+002E   0020           00069    BANKSEL      TX_COUNT
+002F   3000           00070    MOVLW        H'00'
+0030   0233           00071    SUBWF        TX_COUNT,0              ;Subtract 0 from TX_COUNT Store in W
+0031   0020           00072    BANKSEL      STATUS
+0032   1903           00073    BTFSC        STATUS,2                ;Skip if TX_COUNT is not 0
+0033   2???           00074    GOTO         PACKET_1
+0034   0020           00075    BANKSEL      TX_COUNT
+0035   3001           00076    MOVLW        H'01'
+0036   0233           00077    SUBWF        TX_COUNT,0              ;Subtract 1 from TX_COUNT Store in W
+0037   0020           00078    BANKSEL      STATUS
+0038   1903           00079    BTFSC        STATUS,2                ;Skip if TX_COUNT is not 1
+0039   2???           00080    GOTO         PACKET_2
+003A   0020           00081    BANKSEL      TX_COUNT
+003B   3002           00082    MOVLW        H'02'
+003C   0233           00083    SUBWF        TX_COUNT,0              ;Subtract 2 from TX_COUNT Store in W
+003D   0020           00084    BANKSEL      STATUS
+003E   1903           00085    BTFSC        STATUS,2                ;Skip if TX_COUNT is not 2
+003F   2???           00086    GOTO         PACKET_3
+                      00087 ;*************************************************************************************
+                      00088 ;*****To add More Data Packets add Packet Check Here**********************************
+                      00089 ;*************************************************************************************
+                      00090 ;   BANKSEL     TX_COUNT
+                      00091 ;   MOVLW       H'xx'
+                      00092 ;   SUBWF       TX_COUNT,0              ;Subtract x from TX_COUNT Store in W
+                      00093 ;   BANKSEL     STATUS
+                      00094 ;   BTFSC       STATUS,2                ;Skip if TX_COUNT is not x
+                      00095 ;   GOTO        PACKET_x
+                      00096 ;**************************^^Template For Extending Packet #^^*************************
+                      00097 ;**************************************************************************************
+0040   01B3           00098    CLRF         TX_COUNT                ;Packet Count Unknown (Not 0-2) Reset to Packet 1
+0041   2???           00099    GOTO         DETERMINE_PACKET_END    ;TX_COUNT IS Not 0, 1, OR 2 Clear Count and Exit
+0042                  00100 PACKET_1
+Message[305]: Using default destination of 1 (file).
+0042   0AB3           00101    INCF         TX_COUNT                ;Increment Packet Count to TX Joystick 2 Packet Next
+0043   2???           00102    CALL         INIT_JOY1_TX            ;Set Command Byte and Data Bytes for Joystick 1 Packet
+0044   2???           00103    GOTO         DETERMINE_PACKET_END    ;Exit Routine
+0045                  00104 PACKET_2
+Message[305]: Using default destination of 1 (file).
+0045   0AB3           00105    INCF         TX_COUNT                ;Increment Packet Count to TX Buttons Next
+0046   2???           00106    CALL         INIT_JOY2_TX            ;Set Command Byte and Data Bytes for Joystick 2 Packet
+0047   2???           00107    GOTO         DETERMINE_PACKET_END    ;Exit Routine
+0048                  00108 PACKET_3
+0048   01B3           00109    CLRF         TX_COUNT                ;Clear Packet Count to TX Joystick 1 Packet Next 
+0049   2???           00110    CALL         INIT_BUTTONS_TX         ;Set Command Byte and Data Bytes for Buttons Packet
+004A   2???           00111    GOTO         DETERMINE_PACKET_END    ;Exit Routine
+                      00112 ;*************************************************************************************
+                      00113 ;**********To add More Data Packets Add Packet Command and Data Here******************
+                      00114 ;*************************************************************************************
+                      00115 ;PACKET_x
+                      00116 ;   INCF                TX_COUNT                ;Increment Packet Count to TX Next Packet (CLEAR IF LAST
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 12
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                             PACKET) 
+                      00117 ;   CALL                INIT_X_TX               ;Set Command Byte and Data Bytes for Desired Packet
+                      00118 ;   GOTO                DETERMINE_PACKET_END    ;Exit Routine
+                      00119 ;**************************^^Template For Extending Packet #^^*************************
+                      00120 ;**************************************************************************************
+004B                  00121 DETERMINE_PACKET_END
+004B   0008           00122    RETURN
+                      00123    
+                      00124 ;******************************************************************************************             
+                      00125 ;Load TX Registers With First Joystick Data Packet Bytes
+                      00126 ;******************************************************************************************
+004C                  00127 INIT_JOY1_TX
+004C   0020           00128    BANKSEL      JOY_1_CMND
+004D   0822           00129    MOVFW        JOY_1_CMND
+004E   0020           00130    BANKSEL      TX_CMND
+004F   00AF           00131    MOVWF        TX_CMND                 ;Save Command Byte as: "J" for First Joystick Data Packet
+0050   0020           00132    BANKSEL      JOYSTICK_1_UD
+0051   0825           00133    MOVFW        JOYSTICK_1_UD
+0052   0020           00134    BANKSEL      TX_DATA_1
+0053   00B0           00135    MOVWF        TX_DATA_1               ;Save Left Joystick(1) Up Down Data as First Byte
+0054   0020           00136    BANKSEL      JOYSTICK_1_LR
+0055   0826           00137    MOVFW        JOYSTICK_1_LR
+0056   0020           00138    BANKSEL      TX_DATA_2
+0057   00B1           00139    MOVWF        TX_DATA_2               ;Save Left Joystick(1) Left Right Data as Second Byte
+0058   0020           00140    BANKSEL      JOYSTICK_2_UD
+0059   0827           00141    MOVFW        JOYSTICK_2_UD
+005A   0020           00142    BANKSEL      TX_DATA_3
+005B   00B2           00143    MOVWF        TX_DATA_3               ;Save Right Lower Joystick(2) Up Down Data as Third Byte
+005C   0008           00144    RETURN
+                      00145    
+                      00146 ;******************************************************************************************             
+                      00147 ;Load TX Registers With Second Joystick Data Packet Bytes
+                      00148 ;******************************************************************************************
+005D                  00149 INIT_JOY2_TX
+005D   0020           00150    BANKSEL      JOY_2_CMND
+005E   0823           00151    MOVFW        JOY_2_CMND
+005F   0020           00152    BANKSEL      TX_CMND
+0060   00AF           00153    MOVWF        TX_CMND                 ;Save Command Byte as: "j" for Second Joystick Data Packet
+0061   0020           00154    BANKSEL      JOYSTICK_2_LR
+0062   0828           00155    MOVFW        JOYSTICK_2_LR
+0063   0020           00156    BANKSEL      TX_DATA_1
+0064   00B0           00157    MOVWF        TX_DATA_1               ;Save Right Joystick(2) Left Right Data as First Byte
+0065   0020           00158    BANKSEL      JOYSTICK_3_UD
+0066   0829           00159    MOVFW        JOYSTICK_3_UD
+0067   0020           00160    BANKSEL      TX_DATA_2
+0068   00B1           00161    MOVWF        TX_DATA_2               ;Save Right Upper Joystick(3) Up Down Data as Second Byte
+0069   0020           00162    BANKSEL      JOYSTICK_3_LR
+006A   082A           00163    MOVFW        JOYSTICK_3_LR
+006B   0020           00164    BANKSEL      TX_DATA_3
+006C   00B2           00165    MOVWF        TX_DATA_3               ;Save Right Upper Joystick(3) Left Right Data as Third Byte
+006D   0008           00166    RETURN
+                      00167    
+                      00168 ;******************************************************************************************             
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 13
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00169 ;Load TX Registers With Buttons Data Packet Bytes
+                      00170 ;******************************************************************************************
+006E                  00171 INIT_BUTTONS_TX
+006E   0020           00172    BANKSEL      BUTTONS_CMND
+006F   0824           00173    MOVFW        BUTTONS_CMND
+0070   0020           00174    BANKSEL      TX_CMND
+0071   00AF           00175    MOVWF        TX_CMND                 ;Save Command Byte as: "b" for Button Data Packet
+0072   0020           00176    BANKSEL      BUTTON_DATA_1
+0073   082B           00177    MOVFW        BUTTON_DATA_1
+0074   0020           00178    BANKSEL      TX_DATA_1
+0075   00B0           00179    MOVWF        TX_DATA_1               ;Save First Button Data Packet as First Byte
+0076   0020           00180    BANKSEL      BUTTON_DATA_2
+0077   082C           00181    MOVFW        BUTTON_DATA_2
+0078   0020           00182    BANKSEL      TX_DATA_2
+0079   00B1           00183    MOVWF        TX_DATA_2               ;Save Second Button Data Packet as Second Byte
+007A   0020           00184    BANKSEL      TX_DATA_3
+007B   01B2           00185    CLRF         TX_DATA_3               ;Clear The Third Byte as this Packet Does not Need this Data
+007C   0020           00186    BANKSEL      BUTTON_DATA_1
+007D   01AB           00187    CLRF         BUTTON_DATA_1
+007E   01AC           00188    CLRF         BUTTON_DATA_2           ;Clear Buttons Pressed Data Already Stored For TX
+007F   0008           00189    RETURN
+                      00190    
+                      00191 ;******************************************************************************************             
+                      00192 ;***To add More Data Packets. Load TX Registers With Command and Packet Bytes Here*********
+                      00193 ;******************************************************************************************
+                      00194 ;INIT_x_TX
+                      00195 ;   BANKSEL     x_CMND
+                      00196 ;   MOVFW       x_CMND
+                      00197 ;   BANKSEL     TX_CMND
+                      00198 ;   MOVWF       TX_CMND                 ;Save Command Byte as: "x" for ____ Data Packet
+                      00199 ;   BANKSEL     X_DATA_VAR_1
+                      00200 ;   MOVFW       X_DATA_CAR_1
+                      00201 ;   BANKSEL     TX_DATA_1
+                      00202 ;   MOVWF       TX_DATA_1               ;Save First _____ Data Packet as First Byte
+                      00203 ;   BANKSEL     X_DATA_VAR_2
+                      00204 ;   MOVFW       X_DATA_VAR_2
+                      00205 ;   BANKSEL     TX_DATA_2
+                      00206 ;   MOVWF       TX_DATA_2               ;Save Second ______ Data Packet as Second Byte
+                      00207 ;   BANKSEL     X_DATA_VAR_2
+                      00208 ;   MOVFW       X_DATA_VAR_3
+                      00209 ;   BANKSEL     TX_DATA_3
+                      00210 ;   MOVWF       TX_DATA_3               ;Save Third ______ Data Packet as Second Byte
+                      00211 ;   RETURN
+                      00212 ;**************************^^Template For Extending Packet #^^*************************
+                      00213 ;**************************************************************************************   
+                      00024 #INCLUDE <URC_ADC.INC>                                  ;Include File That Contains ADC Channel Select F
+                            unctions
+                      00001 ;****************************************************************************
+                      00002 ;                                                                           *
+                      00003 ;           File Name: URC_ADC.inc                                          *
+                      00004 ;           Date: 11/24/24                                                  *
+                      00005 ;           File Version: 1                                                 *
+                      00006 ;           Author:    Zac Christensen                                      *
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 14
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00007 ;           Company:   Idaho State Univerisy; RCET                          *
+                      00008 ;           Description:  ADC Channel Detection and Increment Functions     *
+                      00009 ;                           Functions Only Called In ADC Interrupt          *
+                      00010 ;                                                                           *
+                      00011 ;****************************************************************************
+                      00012     
+                      00013     
+                      00014 ADC_CODE CODE
+                      00015  
+0000                  00016 DETERMINE_ANCH  ;*************Determine the Current Channel Based On ANCH_COUNT.  Saves Data and Sets Up
+                             Next Channel*************************
+0000   0020           00017     BANKSEL     ANCH_COUNT
+0001   3000           00018     MOVLW       H'00'
+0002   023A           00019     SUBWF       ANCH_COUNT,0            ;Subtract 0 from ANCH_COUNT Store in W
+0003   0020           00020     BANKSEL     STATUS
+0004   1903           00021     BTFSC       STATUS,2                ;Skip if ANCH_COUNT is not 0
+0005   2???           00022     GOTO        IS_ANCH0
+0006   0020           00023     BANKSEL     ANCH_COUNT
+0007   3001           00024     MOVLW       H'01'
+0008   023A           00025     SUBWF       ANCH_COUNT,0            ;Subtract 1 from ANCH_COUNT Store in W
+0009   0020           00026     BANKSEL     STATUS
+000A   1903           00027     BTFSC       STATUS,2                ;Skip if ANCH_COUNT is not 1
+000B   2???           00028     GOTO        IS_ANCH1
+000C   0020           00029     BANKSEL     ANCH_COUNT
+000D   3002           00030     MOVLW       H'02'
+000E   023A           00031     SUBWF       ANCH_COUNT,0            ;Subtract 2 from ANCH_COUNT Store in W
+000F   0020           00032     BANKSEL     STATUS
+0010   1903           00033     BTFSC       STATUS,2                ;Skip if ANCH_COUNT is not 2
+0011   2???           00034     GOTO        IS_ANCH2
+0012   0020           00035     BANKSEL     ANCH_COUNT
+0013   3003           00036     MOVLW       H'03'
+0014   023A           00037     SUBWF       ANCH_COUNT,0            ;Subtract 3 from ANCH_COUNT Store in W
+0015   0020           00038     BANKSEL     STATUS
+0016   1903           00039     BTFSC       STATUS,2                ;Skip if ANCH_COUNT is not 3
+0017   2???           00040     GOTO        IS_ANCH3
+0018   0020           00041     BANKSEL     ANCH_COUNT
+0019   3004           00042     MOVLW       H'04'
+001A   023A           00043     SUBWF       ANCH_COUNT,0            ;Subtract 4 from ANCH_COUNT Store in W
+001B   0020           00044     BANKSEL     STATUS
+001C   1903           00045     BTFSC       STATUS,2                ;Skip if ANCH_COUNT is not 4
+001D   2???           00046     GOTO        IS_ANCH4
+001E   0020           00047     BANKSEL     ANCH_COUNT
+001F   3005           00048     MOVLW       H'05'
+0020   023A           00049     SUBWF       ANCH_COUNT,0            ;Subtract 5 from ANCH_COUNT Store in W
+0021   0020           00050     BANKSEL     STATUS
+0022   1903           00051     BTFSC       STATUS,2                ;Skip if ANCH_COUNT is not 5
+0023   2???           00052     GOTO        IS_ANCH5
+0024   0020           00053     BANKSEL     ANCH_COUNT
+0025   01BA           00054     CLRF        ANCH_COUNT              ;Channel Unknown (Not 0 - 5) Clear Flag to Reset to CH0
+0026   0020           00055     BANKSEL     ANCH0
+0027   0834           00056     MOVFW       ANCH0
+0028   0021           00057     BANKSEL     ADCON0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 15
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0029   009D           00058     MOVWF       ADCON0                  ;Select Analog Channel 0  Next and Enable ADC
+002A   2???           00059     GOTO        DETERMINE_ANCH_END      ;ANCH_COUNT IS Not 0-5 Clear Count Set Up Channel 0 and Exit
+002B                  00060 IS_ANCH0
+Message[305]: Using default destination of 1 (file).
+002B   0ABA           00061     INCF        ANCH_COUNT              ;Increment Channel Count For CH1 Nextt
+002C   0020           00062     BANKSEL     ANCH1
+002D   0835           00063     MOVFW       ANCH1
+002E   0021           00064     BANKSEL     ADCON0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+002F   009D           00065     MOVWF       ADCON0                  ;Select Analog Channel 1  Next and Enable ADC
+0030   0021           00066     BANKSEL     ADRESH
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0031   081C           00067     MOVFW       ADRESH
+0032   0020           00068     BANKSEL     JOYSTICK_1_UD
+0033   00A5           00069     MOVWF       JOYSTICK_1_UD           ;Save ADC Result Upper 8 Bits as Joystick 1 Up Down Data
+0034   2???           00070     GOTO        DETERMINE_ANCH_END      ;Exit Routine
+0035                  00071 IS_ANCH1
+Message[305]: Using default destination of 1 (file).
+0035   0ABA           00072     INCF        ANCH_COUNT              ;Increment Channel Count For CH2 Nextt
+0036   0020           00073     BANKSEL     ANCH2
+0037   0836           00074     MOVFW       ANCH2
+0038   0021           00075     BANKSEL     ADCON0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0039   009D           00076     MOVWF       ADCON0                  ;Select Analog Channel 2  Next and Enable ADC
+003A   0021           00077     BANKSEL     ADRESH
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+003B   081C           00078     MOVFW       ADRESH
+003C   0020           00079     BANKSEL     JOYSTICK_1_LR
+003D   00A6           00080     MOVWF       JOYSTICK_1_LR           ;Save ADC Result Upper 8 Bits as Joystick 1 Left Right Data
+003E   2???           00081     GOTO        DETERMINE_ANCH_END      ;Exit Routine
+003F                  00082 IS_ANCH2
+Message[305]: Using default destination of 1 (file).
+003F   0ABA           00083     INCF        ANCH_COUNT              ;Increment Channel Count For CH3 Nextt
+0040   0020           00084     BANKSEL     ANCH3
+0041   0837           00085     MOVFW       ANCH3
+0042   0021           00086     BANKSEL     ADCON0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0043   009D           00087     MOVWF       ADCON0                  ;Select Analog Channel 3  Next and Enable ADC
+0044   0021           00088     BANKSEL     ADRESH
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0045   081C           00089     MOVFW       ADRESH
+0046   0020           00090     BANKSEL     JOYSTICK_2_UD
+0047   00A7           00091     MOVWF       JOYSTICK_2_UD           ;Save ADC Result Upper 8 Bits as Joystick 2 Up Down Data
+0048   2???           00092     GOTO        DETERMINE_ANCH_END      ;Exit Routine
+0049                  00093 IS_ANCH3
+Message[305]: Using default destination of 1 (file).
+0049   0ABA           00094     INCF        ANCH_COUNT              ;Increment Channel Count For CH4 Nextt
+004A   0020           00095     BANKSEL     ANCH4
+004B   0838           00096     MOVFW       ANCH4
+004C   0021           00097     BANKSEL     ADCON0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+004D   009D           00098     MOVWF       ADCON0                  ;Select Analog Channel 4  Next and Enable ADC
+004E   0021           00099     BANKSEL     ADRESH
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 16
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+004F   081C           00100     MOVFW       ADRESH
+0050   0020           00101     BANKSEL     JOYSTICK_2_LR
+0051   00A8           00102     MOVWF       JOYSTICK_2_LR           ;Save ADC Result Upper 8 Bits as Joystick 2 Left Right Data
+0052   2???           00103     GOTO        DETERMINE_ANCH_END      ;Exit Routine
+0053                  00104 IS_ANCH4
+Message[305]: Using default destination of 1 (file).
+0053   0ABA           00105     INCF        ANCH_COUNT              ;Increment Channel Count For CH5 Nextt
+0054   0020           00106     BANKSEL     ANCH5
+0055   0839           00107     MOVFW       ANCH5
+0056   0021           00108     BANKSEL     ADCON0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0057   009D           00109     MOVWF       ADCON0                  ;Select Analog Channel 5  Next and Enable ADC
+0058   0021           00110     BANKSEL     ADRESH
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0059   081C           00111     MOVFW       ADRESH
+005A   0020           00112     BANKSEL     JOYSTICK_3_UD
+005B   00A9           00113     MOVWF       JOYSTICK_3_UD           ;Save ADC Result Upper 8 Bits as Joystick 3 Up Down Data
+005C   2???           00114     GOTO        DETERMINE_ANCH_END      ;Exit Routine
+005D                  00115 IS_ANCH5
+005D   01BA           00116     CLRF        ANCH_COUNT              ;Clear Channel Count For CH0 Nextt
+005E   0020           00117     BANKSEL     ANCH0
+005F   0834           00118     MOVFW       ANCH0
+0060   0021           00119     BANKSEL     ADCON0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0061   009D           00120     MOVWF       ADCON0                  ;Select Analog Channel 0  Next and Enable ADC
+0062   0021           00121     BANKSEL     ADRESH
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0063   081C           00122     MOVFW       ADRESH
+0064   0020           00123     BANKSEL     JOYSTICK_3_LR
+0065   00AA           00124     MOVWF       JOYSTICK_3_LR           ;Save ADC Result Upper 8 Bits as Joystick 3 Left Right Data
+0066                  00125 DETERMINE_ANCH_END
+0066   0008           00126     RETURN
+                      00025 ;LIST    P=16LF1789                                     ;list directive to define processor
+                      00026 ;errorlevel -302,-207,-305,-206,-203                    ;suppress "not in bank 0" message,  Found label 
+                            after column 1,
+                      00027     
+                      00028 ;******************************************    
+                      00029 ;Configuration
+                      00030 ;******************************************
+                      00031     
+                      00032 ; CONFIG1
+                      00033 ; __config 0xC9E4
+8007   09E4           00034  __CONFIG _CONFIG1, _FOSC_INTOSC & _WDTE_OFF & _PWRTE_OFF & _MCLRE_ON & _CP_OFF & _CPD_OFF & _BOREN_OFF 
+                            & _CLKOUTEN_OFF & _IESO_OFF & _FCMEN_OFF
+                      00035 ; CONFIG2
+                      00036 ; __config 0xDDFF
+8008   1DFF           00037  __CONFIG _CONFIG2, _WRT_OFF & _PLLEN_ON & _STVREN_OFF & _BORV_LO & _LPBOR_OFF & _LVP_OFF
+                      00038 
+                      00039 ;******************************************             
+                      00040 ;Interrupt Vectors
+                      00041 ;******************************************
+                      00042     ORG H'00'                                   
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 17
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0000   2???           00043     GOTO SETUP                              ;RESET CONDITION GOTO SETUP
+                      00044     ORG H'04'
+0004   2???           00045     GOTO INTERRUPT                          ;Interrupt occur GOTO INTERRUPT
+                      00046     
+                      00047 ;******************************************
+                      00048 ;Setup Routine
+                      00049 ;******************************************
+0005                  00050 SETUP
+0005   2???           00051     CALL    INITIALIZE
+                      00052     
+                      00053 ;*****Not Currently Using USART Receive***************************
+                      00054 ;    BANKSEL    RCSTA
+                      00055 ;    BSF        RCSTA,4                     ;Enable Continuous Receive
+                      00056     
+0006   0023           00057     BANKSEL     TXSTA
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0007   169E           00058     BSF         TXSTA,5                     ;Enable Transmit
+                      00059         
+0008   0020           00060     BANKSEL     T2CON
+0009   151C           00061     BSF         T2CON,2                     ;Enable Timer 2
+                      00062 
+000A   0020           00063     BANKSEL     INTCON
+000B   178B           00064     BSF         INTCON,7                    ;Enable Global Interrupts
+                      00065     
+000C   0021           00066     BANKSEL     ADCON0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+000D   149D           00067     BSF         ADCON0,1                    ;Start Conversion
+                      00068     
+000E   2???           00069     CALL        SET_ROBOT_ADDR              ;Load Dip Switch Value as Robot Address
+                      00070 
+000F   2???           00071     GOTO    MAIN
+                      00072     
+                      00073 ;******************************************
+                      00074 ;Interrupt Service Routine
+                      00075 ;******************************************
+0010                  00076 INTERRUPT
+0010   0020           00077     BANKSEL     PIR1
+0011   1891           00078     BTFSC       PIR1,1                      ;Test Timer 2 Interrupt Flag
+0012   2???           00079     CALL        TMR2_INTERRUPT              ;Occurs every ~16mS
+                      00080     
+0013   0020           00081     BANKSEL     PIR1
+0014   1B11           00082     BTFSC       PIR1,6                      ;Test ADC Interrupt Flag
+0015   2???           00083     CALL        ADC_INTERRUPT               ;ADC has Finish Conversion
+0016   0009           00084     RETFIE
+                      00085     
+                      00086 ;******************************************
+                      00087 ;Sub Routines
+                      00088 ;******************************************
+0017                  00089 TMR2_INTERRUPT
+                      00090 ;    BANKSEL    TIMERCOUNT
+                      00091 ;    DECFSZ     TIMERCOUNT
+                      00092 ;    GOTO       TMR2_INTERRUPT_END          ;1/2s Has Not Yet Occured Exit Interrupt
+                      00093 ;    
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 18
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00094 ;    MOVLW      D'31'
+                      00095 ;    MOVWF      TIMERCOUNT                  ;Reset Timer Count to 31 (16.32ms * 31 = 0.505S)
+                      00096     ;*******This Code Should Run Every 0.5S************************************* 
+0017   2???           00097     CALL        SET_ROBOT_ADDR              ;Update Transmit Address Before TX
+0018   2???           00098     CALL        DETERMINE_PACKET            ;Determine Which Packet Should Be Sent and Load Corrispondin
+                            g Data  
+0019   2???           00099     CALL        SEND_DATA_PACKET            ;Transmit Data Packet
+001A                  00100 TMR2_INTERRUPT_END
+001A   0020           00101     BANKSEL     PIR1
+001B   1091           00102     BCF         PIR1,1                      ;Clear Timer 2 Interrupt Flag
+001C   0008           00103     RETURN
+                      00104     
+001D                  00105 ADC_INTERRUPT ;Save ADC RESULT and Begin Converison on Next Channel
+001D   0021           00106    BANKSEL      ADCON0
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+001E   101D           00107    BCF          ADCON0,0                    ;Disable ADC to Prepare for New Channel Input
+001F   2???           00108    CALL         DETERMINE_ANCH              ;Determine Current Channel, Save Channel Data, and Start Nex
+                            t Channel
+0020                  00109 ADC_INTERRUPT_END
+0020   0021           00110     BANKSEL     ADCON0      
+Message[302]: Register in operand not in bank 0.  Ensure that bank bits are correct.
+0021   149D           00111     BSF         ADCON0,1                    ;Start Next Conversion
+0022   0020           00112     BANKSEL     PIR1
+0023   1311           00113     BCF         PIR1,6                      ;Clear ADC Interrupt Flag
+0024   0008           00114     RETURN
+                      00115 
+                      00116     
+0025                  00117 SET_ROBOT_ADDR  ;This Sets the Robot Address Register to The Value of Port B
+0025   0020           00118     BANKSEL     PORTB
+0026   080D           00119     MOVFW       PORTB
+0027   0020           00120     BANKSEL     TX_ADDR
+0028   00AE           00121     MOVWF       TX_ADDR
+0029   0008           00122     RETURN
+                      00123     
+002A                  00124 UPDATE_BAR_DISPLAY ;Update the LED Bar Display on PORT D
+                      00125     ;****Move Port B Value to LED Bar Display
+002A   0020           00126     BANKSEL     PORTB
+002B   080D           00127     MOVFW       PORTB
+002C   0020           00128     BANKSEL     PORTD
+002D   008F           00129     MOVWF       PORTD
+                      00130     ;****************************************
+                      00131     
+                      00132 ;    ;****Move JOYSTICK_1_UD Value to LED Bar Display
+                      00133 ;    BANKSEL    JOYSTICK_1_UD
+                      00134 ;    MOVFW      JOYSTICK_1_UD
+                      00135 ;    BANKSEL    PORTD
+                      00136 ;    MOVWF      PORTD
+                      00137 ;    ;****************************************
+                      00138     
+                      00139 ;    ;****Move JOYSTICK_1_LR Value to LED Bar Display
+                      00140 ;    BANKSEL    JOYSTICK_1_LR
+                      00141 ;    MOVFW      JOYSTICK_1_LR
+                      00142 ;    BANKSEL    PORTD
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 19
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00143 ;    MOVWF      PORTD
+                      00144 ;    ;****************************************
+                      00145     
+                      00146 ;    ;****Move JOYSTICK_2_UD Value to LED Bar Display
+                      00147 ;    BANKSEL    JOYSTICK_2_UD
+                      00148 ;    MOVFW      JOYSTICK_2_UD
+                      00149 ;    BANKSEL    PORTD
+                      00150 ;    MOVWF      PORTD
+                      00151 ;    ;****************************************
+                      00152     
+                      00153 ;    ;****Move JOYSTICK_2_LR Value to LED Bar Display
+                      00154 ;    BANKSEL    JOYSTICK_2_LR
+                      00155 ;    MOVFW      JOYSTICK_2_LR
+                      00156 ;    BANKSEL    PORTD
+                      00157 ;    MOVWF      PORTD
+                      00158 ;    ;****************************************
+                      00159     
+                      00160 ;    ;****Move JOYSTICK_3_UD Value to LED Bar Display
+                      00161 ;    BANKSEL    JOYSTICK_3_UD
+                      00162 ;    MOVFW      JOYSTICK_3_UD
+                      00163 ;    BANKSEL    PORTD
+                      00164 ;    MOVWF      PORTD
+                      00165 ;    ;****************************************
+                      00166     
+                      00167 ;    ;****Move JOYSTICK_3_LR Value to LED Bar Display
+                      00168 ;    BANKSEL    JOYSTICK_3_LR
+                      00169 ;    MOVFW      JOYSTICK_3_LR
+                      00170 ;    BANKSEL    PORTD
+                      00171 ;    MOVWF      PORTD
+                      00172 ;    ;****************************************
+                      00173     
+002E   0008           00174     RETURN
+                      00175 ;******************************************
+                      00176 ;Main Code
+                      00177 ;******************************************
+002F                  00178 MAIN  
+002F   2???           00179     CALL        UPDATE_BAR_DISPLAY
+                      00180     ;************************************************************************************
+                      00181     ;****Check Buttons and Update Transmission Flags*************************************
+                      00182     ;****NOTE:  All Port Registers and All Button Registers in the Same Bank[0]**********
+                      00183     ;************************************************************************************
+0030   0020           00184     BANKSEL     PORTA
+0031   1A0C           00185     BTFSC       PORTA,4
+0032   142B           00186     BSF         BUTTON_DATA_1,0             ;Test Button and Set Button 1 Flag (Down Face Button)
+                      00187     
+0033   0020           00188     BANKSEL     PORTE
+0034   1890           00189     BTFSC       PORTE,1
+0035   14AB           00190     BSF         BUTTON_DATA_1,1             ;Test Button and Set Button 2 Flag (Right Face Button)
+                      00191     
+0036   0020           00192     BANKSEL     PORTE
+0037   1910           00193     BTFSC       PORTE,2
+0038   152B           00194     BSF         BUTTON_DATA_1,2             ;Test Button and Set Button 3 Flag (Left Face Button)
+                      00195     
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 20
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0039   0020           00196     BANKSEL     PORTC
+003A   180E           00197     BTFSC       PORTC,0
+003B   15AB           00198     BSF         BUTTON_DATA_1,3             ;Test Button and Set Button 4 Flag (Up Face Button)
+                      00199     
+003C   0020           00200     BANKSEL     PORTA
+003D   1B0C           00201     BTFSC       PORTA,6
+003E   162B           00202     BSF         BUTTON_DATA_1,4             ;Test Button and Set Left Bumper Flag
+                      00203     
+003F   0020           00204     BANKSEL     PORTA
+0040   1B8C           00205     BTFSC       PORTA,7
+0041   16AB           00206     BSF         BUTTON_DATA_1,5             ;Test Button and Set Right Bumper Flag
+                      00207     
+0042   0020           00208     BANKSEL     PORTC
+0043   188E           00209     BTFSC       PORTC,1
+0044   172B           00210     BSF         BUTTON_DATA_1,6             ;Test Button and Set Left Joystick(1) Flag
+                      00211     
+0045   0020           00212     BANKSEL     PORTC
+0046   190E           00213     BTFSC       PORTC,2
+0047   17AB           00214     BSF         BUTTON_DATA_1,7             ;Test Button and Set Right Lower Joystick(2) Flag
+                      00215     
+0048   0020           00216     BANKSEL     PORTC
+0049   1A8E           00217     BTFSC       PORTC,5
+004A   142C           00218     BSF         BUTTON_DATA_2,0             ;Test Button and Set Right Upper Joystick(3) Flag
+                      00219     ;************************************************************************************
+                      00220     ;**************************All Buttons Checked***************************************
+                      00221     ;************************************************************************************ 
+004B   2???           00222     GOTO        MAIN
+09E4 1DFF             00223     END                         ;END PROGRAM DIRECTIVE *******************************
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 21
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ABDEN                             00000000
+ABDOVF                            00000007
+ACKDT                             00000005
+ACKEN                             00000004
+ACKSTAT                           00000006
+ACKTIM                            00000007
+ADCON0                            0000009D
+ADCON1                            0000009E
+ADCON2                            0000009F
+ADCS0                             00000004
+ADCS1                             00000005
+ADCS2                             00000006
+ADC_INTERRUPT                     0000001D
+ADC_INTERRUPT_END                 00000020
+ADD0                              00000000
+ADD1                              00000001
+ADD2                              00000002
+ADD3                              00000003
+ADD4                              00000004
+ADD5                              00000005
+ADD6                              00000006
+ADD7                              00000007
+ADDEN                             00000003
+ADFM                              00000007
+ADFVR0                            00000000
+ADFVR1                            00000001
+ADGO                              00000001
+ADIE                              00000006
+ADIF                              00000006
+ADNREF                            00000002
+ADON                              00000000
+ADPREF0                           00000000
+ADPREF1                           00000001
+ADRES                             0000009B
+ADRESH                            0000009C
+ADRESL                            0000009B
+ADRMD                             00000007
+AHEN                              00000001
+ANCH0                             00000034
+ANCH1                             00000035
+ANCH2                             00000036
+ANCH3                             00000037
+ANCH4                             00000038
+ANCH5                             00000039
+ANCH_COUNT                        0000003A
+ANSA0                             00000000
+ANSA1                             00000001
+ANSA2                             00000002
+ANSA3                             00000003
+ANSA4                             00000004
+ANSA5                             00000005
+ANSA7                             00000007
+ANSB0                             00000000
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 22
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ANSB1                             00000001
+ANSB2                             00000002
+ANSB3                             00000003
+ANSB4                             00000004
+ANSB5                             00000005
+ANSB6                             00000006
+ANSC0                             00000000
+ANSC1                             00000001
+ANSC2                             00000002
+ANSC3                             00000003
+ANSC4                             00000004
+ANSC5                             00000005
+ANSC6                             00000006
+ANSC7                             00000007
+ANSD0                             00000000
+ANSD1                             00000001
+ANSD2                             00000002
+ANSE0                             00000000
+ANSE1                             00000001
+ANSE2                             00000002
+ANSELA                            0000018C
+ANSELB                            0000018D
+ANSELC                            0000018E
+ANSELD                            0000018F
+ANSELE                            00000190
+APFCON                            0000011D
+APFCON0                           0000011D
+APFCON1                           0000011D
+APFCON2                           0000011C
+BAUD                              D'100'
+BAUD1CON                          0000019F
+BAUDCON                           0000019F
+BAUDCON1                          0000019F
+BAUDCTL                           0000019F
+BAUDCTL1                          0000019F
+BCL1IE                            00000003
+BCL1IF                            00000003
+BF                                00000000
+BOEN                              00000004
+BORCON                            00000116
+BORFS                             00000006
+BORRDY                            00000000
+BRG16                             00000003
+BRGH                              00000002
+BSR                               00000008
+BSR0                              00000000
+BSR1                              00000001
+BSR2                              00000002
+BSR3                              00000003
+BSR4                              00000004
+BSR_SHAD                          00000FE6
+BUF0                              00000000
+BUF1                              00000001
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 23
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+BUF2                              00000002
+BUF3                              00000003
+BUF4                              00000004
+BUF5                              00000005
+BUF6                              00000006
+BUF7                              00000007
+BUTTONS_CMND                      00000024
+BUTTON_DATA_1                     0000002B
+BUTTON_DATA_2                     0000002C
+C                                 00000000
+C1HYS                             00000001
+C1IE                              00000005
+C1IF                              00000005
+C1INTN                            00000006
+C1INTP                            00000007
+C1NCH0                            00000000
+C1NCH1                            00000001
+C1NCH2                            00000002
+C1OE                              00000005
+C1ON                              00000007
+C1OUT                             00000006
+C1PCH0                            00000003
+C1PCH1                            00000004
+C1PCH2                            00000005
+C1POL                             00000004
+C1SP                              00000002
+C1SYNC                            00000000
+C1ZLF                             00000003
+C2HYS                             00000001
+C2IE                              00000006
+C2IF                              00000006
+C2INTN                            00000006
+C2INTP                            00000007
+C2NCH0                            00000000
+C2NCH1                            00000001
+C2NCH2                            00000002
+C2OE                              00000005
+C2ON                              00000007
+C2OUT                             00000006
+C2OUTSEL                          00000007
+C2PCH0                            00000003
+C2PCH1                            00000004
+C2PCH2                            00000005
+C2POL                             00000004
+C2SP                              00000002
+C2SYNC                            00000000
+C2ZLF                             00000003
+C3HYS                             00000001
+C3IE                              00000001
+C3IF                              00000001
+C3INTN                            00000006
+C3INTP                            00000007
+C3NCH0                            00000000
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 24
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+C3NCH1                            00000001
+C3NCH2                            00000002
+C3OE                              00000005
+C3ON                              00000007
+C3OUT                             00000006
+C3PCH0                            00000003
+C3PCH1                            00000004
+C3PCH2                            00000005
+C3POL                             00000004
+C3SP                              00000002
+C3SYNC                            00000000
+C3ZLF                             00000003
+C4HYS                             00000001
+C4IE                              00000002
+C4IF                              00000002
+C4INTN                            00000006
+C4INTP                            00000007
+C4NCH0                            00000000
+C4NCH1                            00000001
+C4NCH2                            00000002
+C4OE                              00000005
+C4ON                              00000007
+C4OUT                             00000006
+C4PCH0                            00000003
+C4PCH1                            00000004
+C4PCH2                            00000005
+C4POL                             00000004
+C4SP                              00000002
+C4SYNC                            00000000
+C4ZLF                             00000003
+CCP1CON                           00000293
+CCP1IE                            00000002
+CCP1IF                            00000002
+CCP1M0                            00000000
+CCP1M1                            00000001
+CCP1M2                            00000002
+CCP1M3                            00000003
+CCP1SEL                           00000006
+CCP2CON                           0000029A
+CCP2IE                            00000000
+CCP2IF                            00000000
+CCP2M0                            00000000
+CCP2M1                            00000001
+CCP2M2                            00000002
+CCP2M3                            00000003
+CCP2SEL                           00000000
+CCP3CON                           00000313
+CCP3IE                            00000004
+CCP3IF                            00000004
+CCP3M0                            00000000
+CCP3M1                            00000001
+CCP3M2                            00000002
+CCP3M3                            00000003
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 25
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+CCP3SEL                           00000000
+CCPR1                             00000291
+CCPR1H                            00000292
+CCPR1L                            00000291
+CCPR2                             00000298
+CCPR2H                            00000299
+CCPR2L                            00000298
+CCPR3                             00000311
+CCPR3H                            00000312
+CCPR3L                            00000311
+CDAFVR0                           00000002
+CDAFVR1                           00000003
+CFGS                              00000006
+CHS0                              00000002
+CHS1                              00000003
+CHS2                              00000004
+CHS3                              00000005
+CHS4                              00000006
+CHSN0                             00000000
+CHSN1                             00000001
+CHSN2                             00000002
+CHSN3                             00000003
+CKE                               00000006
+CKP                               00000004
+CLKRCON                           0000051A
+CLKRDC0                           00000003
+CLKRDC1                           00000004
+CLKRDIV0                          00000000
+CLKRDIV1                          00000001
+CLKRDIV2                          00000002
+CLKREN                            00000007
+CLKROE                            00000006
+CLKRSLR                           00000005
+CM1CON0                           00000111
+CM1CON1                           00000112
+CM2CON0                           00000113
+CM2CON1                           00000114
+CM3CON0                           0000011E
+CM3CON1                           0000011F
+CM4CON0                           0000011A
+CM4CON1                           0000011B
+CMOUT                             00000115
+CREN                              00000004
+CSRC                              00000007
+C_SHAD                            00000000
+DAC1CON0                          00000118
+DAC1CON1                          00000119
+DAC1EN                            00000007
+DAC1NSS                           00000000
+DAC1OE1                           00000005
+DAC1OE2                           00000004
+DAC1PSS0                          00000002
+DAC1PSS1                          00000003
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 26
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+DAC1R0                            00000000
+DAC1R1                            00000001
+DAC1R2                            00000002
+DAC1R3                            00000003
+DAC1R4                            00000004
+DAC1R5                            00000005
+DAC1R6                            00000006
+DAC1R7                            00000007
+DAC2CON0                          00000591
+DAC2CON1                          00000592
+DAC2EN                            00000007
+DAC2OE1                           00000005
+DAC2OE2                           00000004
+DAC2REF                           00000592
+DAC3CON0                          00000593
+DAC3CON1                          00000594
+DAC3EN                            00000007
+DAC3OE1                           00000005
+DAC3OE2                           00000004
+DAC3REF                           00000594
+DAC4CON0                          00000595
+DAC4CON1                          00000596
+DAC4EN                            00000007
+DAC4OE1                           00000005
+DAC4OE2                           00000004
+DAC4REF                           00000596
+DACEN                             00000007
+DACNSS                            00000000
+DACOE0                            00000004
+DACOE1                            00000005
+DACPSS0                           00000002
+DACPSS1                           00000003
+DACR0                             00000000
+DACR1                             00000001
+DACR2                             00000002
+DACR3                             00000003
+DACR4                             00000004
+DACR5                             00000005
+DACR6                             00000006
+DACR7                             00000007
+DC                                00000001
+DC1B0                             00000004
+DC1B1                             00000005
+DC2B0                             00000004
+DC2B1                             00000005
+DC3B0                             00000004
+DC3B1                             00000005
+DC_SHAD                           00000001
+DETERMINE_ANCH                    00000000
+DETERMINE_ANCH_END                00000066
+DETERMINE_PACKET                  0000002E
+DETERMINE_PACKET_END              0000004B
+DHEN                              00000000
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 27
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+DONE                              00000001
+D_NOT_A                           00000005
+EEADR                             00000191
+EEADRH                            00000192
+EEADRL                            00000191
+EECON1                            00000195
+EECON2                            00000196
+EEDAT                             00000193
+EEDATH                            00000194
+EEDATL                            00000193
+EEIE                              00000004
+EEIF                              00000004
+EEPGD                             00000007
+EN                                00000007
+F                                 00000001
+FERR                              00000002
+FOSC                              D'16000'
+FREE                              00000004
+FSR0                              00000004
+FSR0H                             00000005
+FSR0H_SHAD                        00000FE9
+FSR0L                             00000004
+FSR0L_SHAD                        00000FE8
+FSR1                              00000006
+FSR1H                             00000007
+FSR1H_SHAD                        00000FEB
+FSR1L                             00000006
+FSR1L_SHAD                        00000FEA
+FVRCON                            00000117
+FVREN                             00000007
+FVRRDY                            00000006
+GCEN                              00000007
+GIE                               00000007
+GO                                00000001
+GO_NOT_DONE                       00000001
+HFIOFL                            00000003
+HFIOFR                            00000004
+HFIOFS                            00000000
+INDF0                             00000000
+INDF1                             00000001
+INITIALIZE                        00000000
+INIT_BUTTONS_TX                   0000006E
+INIT_JOY1_TX                      0000004C
+INIT_JOY2_TX                      0000005D
+INLVLA                            0000038C
+INLVLA0                           00000000
+INLVLA1                           00000001
+INLVLA2                           00000002
+INLVLA3                           00000003
+INLVLA4                           00000004
+INLVLA5                           00000005
+INLVLA6                           00000006
+INLVLA7                           00000007
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 28
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+INLVLB                            0000038D
+INLVLB0                           00000000
+INLVLB1                           00000001
+INLVLB2                           00000002
+INLVLB3                           00000003
+INLVLB4                           00000004
+INLVLB5                           00000005
+INLVLB6                           00000006
+INLVLB7                           00000007
+INLVLC                            0000038E
+INLVLC0                           00000000
+INLVLC1                           00000001
+INLVLC2                           00000002
+INLVLC3                           00000003
+INLVLC4                           00000004
+INLVLC5                           00000005
+INLVLC6                           00000006
+INLVLC7                           00000007
+INLVLD                            0000038F
+INLVLD0                           00000000
+INLVLD1                           00000001
+INLVLD2                           00000002
+INLVLD3                           00000003
+INLVLD4                           00000004
+INLVLD5                           00000005
+INLVLD6                           00000006
+INLVLD7                           00000007
+INLVLE                            00000390
+INLVLE0                           00000000
+INLVLE1                           00000001
+INLVLE2                           00000002
+INLVLE3                           00000003
+INTCON                            0000000B
+INTE                              00000004
+INTEDG                            00000006
+INTERRUPT                         00000010
+INTF                              00000001
+IOCAF                             00000393
+IOCAF0                            00000000
+IOCAF1                            00000001
+IOCAF2                            00000002
+IOCAF3                            00000003
+IOCAF4                            00000004
+IOCAF5                            00000005
+IOCAF6                            00000006
+IOCAF7                            00000007
+IOCAN                             00000392
+IOCAN0                            00000000
+IOCAN1                            00000001
+IOCAN2                            00000002
+IOCAN3                            00000003
+IOCAN4                            00000004
+IOCAN5                            00000005
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 29
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+IOCAN6                            00000006
+IOCAN7                            00000007
+IOCAP                             00000391
+IOCAP0                            00000000
+IOCAP1                            00000001
+IOCAP2                            00000002
+IOCAP3                            00000003
+IOCAP4                            00000004
+IOCAP5                            00000005
+IOCAP6                            00000006
+IOCAP7                            00000007
+IOCBF                             00000396
+IOCBF0                            00000000
+IOCBF1                            00000001
+IOCBF2                            00000002
+IOCBF3                            00000003
+IOCBF4                            00000004
+IOCBF5                            00000005
+IOCBF6                            00000006
+IOCBF7                            00000007
+IOCBN                             00000395
+IOCBN0                            00000000
+IOCBN1                            00000001
+IOCBN2                            00000002
+IOCBN3                            00000003
+IOCBN4                            00000004
+IOCBN5                            00000005
+IOCBN6                            00000006
+IOCBN7                            00000007
+IOCBP                             00000394
+IOCBP0                            00000000
+IOCBP1                            00000001
+IOCBP2                            00000002
+IOCBP3                            00000003
+IOCBP4                            00000004
+IOCBP5                            00000005
+IOCBP6                            00000006
+IOCBP7                            00000007
+IOCCF                             00000399
+IOCCF0                            00000000
+IOCCF1                            00000001
+IOCCF2                            00000002
+IOCCF3                            00000003
+IOCCF4                            00000004
+IOCCF5                            00000005
+IOCCF6                            00000006
+IOCCF7                            00000007
+IOCCN                             00000398
+IOCCN0                            00000000
+IOCCN1                            00000001
+IOCCN2                            00000002
+IOCCN3                            00000003
+IOCCN4                            00000004
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 30
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+IOCCN5                            00000005
+IOCCN6                            00000006
+IOCCN7                            00000007
+IOCCP                             00000397
+IOCCP0                            00000000
+IOCCP1                            00000001
+IOCCP2                            00000002
+IOCCP3                            00000003
+IOCCP4                            00000004
+IOCCP5                            00000005
+IOCCP6                            00000006
+IOCCP7                            00000007
+IOCEF                             0000039F
+IOCEF3                            00000003
+IOCEN                             0000039E
+IOCEN3                            00000003
+IOCEP                             0000039D
+IOCEP3                            00000003
+IOCIE                             00000003
+IOCIF                             00000000
+IRCF0                             00000003
+IRCF1                             00000004
+IRCF2                             00000005
+IRCF3                             00000006
+IS_ANCH0                          0000002B
+IS_ANCH1                          00000035
+IS_ANCH2                          0000003F
+IS_ANCH3                          00000049
+IS_ANCH4                          00000053
+IS_ANCH5                          0000005D
+JOYSTICK_1_LR                     00000026
+JOYSTICK_1_UD                     00000025
+JOYSTICK_2_LR                     00000028
+JOYSTICK_2_UD                     00000027
+JOYSTICK_3_LR                     0000002A
+JOYSTICK_3_UD                     00000029
+JOY_1_CMND                        00000022
+JOY_2_CMND                        00000023
+LATA                              0000010C
+LATA0                             00000000
+LATA1                             00000001
+LATA2                             00000002
+LATA3                             00000003
+LATA4                             00000004
+LATA5                             00000005
+LATA6                             00000006
+LATA7                             00000007
+LATB                              0000010D
+LATB0                             00000000
+LATB1                             00000001
+LATB2                             00000002
+LATB3                             00000003
+LATB4                             00000004
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 31
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+LATB5                             00000005
+LATB6                             00000006
+LATB7                             00000007
+LATC                              0000010E
+LATC0                             00000000
+LATC1                             00000001
+LATC2                             00000002
+LATC3                             00000003
+LATC4                             00000004
+LATC5                             00000005
+LATC6                             00000006
+LATC7                             00000007
+LATD                              0000010F
+LATD0                             00000000
+LATD1                             00000001
+LATD2                             00000002
+LATD3                             00000003
+LATD4                             00000004
+LATD5                             00000005
+LATD6                             00000006
+LATD7                             00000007
+LATE                              00000110
+LATE0                             00000000
+LATE1                             00000001
+LATE2                             00000002
+LFIOFR                            00000001
+LWLO                              00000005
+MAIN                              0000002F
+MC1OUT                            00000000
+MC2OUT                            00000001
+MC3OUT                            00000002
+MC4OUT                            00000003
+MFIOFR                            00000002
+MSK0                              00000000
+MSK1                              00000001
+MSK2                              00000002
+MSK3                              00000003
+MSK4                              00000004
+MSK5                              00000005
+MSK6                              00000006
+MSK7                              00000007
+NOT_BOR                           00000000
+NOT_PD                            00000003
+NOT_POR                           00000001
+NOT_RI                            00000002
+NOT_RMCLR                         00000003
+NOT_RWDT                          00000004
+NOT_T1SYNC                        00000002
+NOT_TO                            00000004
+NOT_WPUEN                         00000007
+ODCONA                            0000028C
+ODCONA0                           00000000
+ODCONA1                           00000001
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 32
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ODCONA2                           00000002
+ODCONA3                           00000003
+ODCONA4                           00000004
+ODCONA5                           00000005
+ODCONA6                           00000006
+ODCONA7                           00000007
+ODCONB                            0000028D
+ODCONB0                           00000000
+ODCONB1                           00000001
+ODCONB2                           00000002
+ODCONB3                           00000003
+ODCONB4                           00000004
+ODCONB5                           00000005
+ODCONB6                           00000006
+ODCONB7                           00000007
+ODCONC                            0000028E
+ODCONC0                           00000000
+ODCONC1                           00000001
+ODCONC2                           00000002
+ODCONC3                           00000003
+ODCONC4                           00000004
+ODCONC5                           00000005
+ODCONC6                           00000006
+ODCONC7                           00000007
+ODCOND                            0000028F
+ODCOND0                           00000000
+ODCOND1                           00000001
+ODCOND2                           00000002
+ODCOND3                           00000003
+ODCOND4                           00000004
+ODCOND5                           00000005
+ODCOND6                           00000006
+ODCOND7                           00000007
+ODCONE                            00000290
+ODCONE0                           00000000
+ODCONE1                           00000001
+ODCONE2                           00000002
+OERR                              00000001
+OPA1CON                           00000511
+OPA1EN                            00000007
+OPA1PCH0                          00000000
+OPA1PCH1                          00000001
+OPA1PCH2                          00000002
+OPA1SP                            00000006
+OPA2CON                           00000513
+OPA2EN                            00000007
+OPA2PCH0                          00000000
+OPA2PCH1                          00000001
+OPA2PCH2                          00000002
+OPA2SP                            00000006
+OPA3CON                           00000515
+OPA3EN                            00000007
+OPA3PCH0                          00000000
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 33
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+OPA3PCH1                          00000001
+OPA3PCH2                          00000002
+OPA3SP                            00000006
+OPTION_REG                        00000095
+OSCCON                            00000099
+OSCSTAT                           0000009A
+OSCTUNE                           00000098
+OSFIE                             00000007
+OSFIF                             00000007
+OSTS                              00000005
+P                                 00000004
+P1ARSEN                           00000005
+P1ASDEN                           00000006
+P1ASDLA                           00000000
+P1ASDLB                           00000001
+P1ASDLC                           00000002
+P1ASDLD                           00000003
+P1ASDLE                           00000004
+P1ASDLF                           00000005
+P1ASDOV                           00000000
+P1ASDSC1                          00000001
+P1ASDSC2                          00000002
+P1ASDSC3                          00000003
+P1ASDSC4                          00000004
+P1ASDSIN                          00000007
+P1ASE                             00000007
+P1CPRE0                           00000004
+P1CPRE1                           00000005
+P1CSRC0                           00000000
+P1CSRC1                           00000001
+P1DBFE                            00000005
+P1DBRE                            00000004
+P1DCPOL                           00000005
+P1DCSC1                           00000001
+P1DCSC2                           00000002
+P1DCSC3                           00000003
+P1DCSC4                           00000004
+P1DCSIN                           00000007
+P1DCST                            00000000
+P1FEBM0                           00000004
+P1FEBM1                           00000005
+P1FEBSC1                          00000001
+P1FEBSC2                          00000002
+P1FEBSC3                          00000003
+P1FEBSC4                          00000004
+P1FEBSIN                          00000007
+P1HSMEN                           00000000
+P1INPOL                           00000006
+P1LSMEN                           00000001
+P1MDLBIT                          00000005
+P1MDLEN                           00000007
+P1MDLPOL                          00000006
+P1MODE0                           00000000
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 34
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P1MODE1                           00000001
+P1MODE2                           00000002
+P1MODE3                           00000003
+P1MSRC0                           00000000
+P1MSRC1                           00000001
+P1MSRC2                           00000002
+P1MSRC3                           00000003
+P1OEA                             00000000
+P1OEB                             00000001
+P1OEC                             00000002
+P1OED                             00000003
+P1OEE                             00000004
+P1OEF                             00000005
+P1PHSC1                           00000001
+P1PHSC2                           00000002
+P1PHSC3                           00000003
+P1PHSC4                           00000004
+P1PHSIN                           00000007
+P1PHST                            00000000
+P1POFST                           00000007
+P1POLA                            00000000
+P1POLB                            00000001
+P1POLC                            00000002
+P1POLD                            00000003
+P1POLE                            00000004
+P1POLF                            00000005
+P1PRPOL                           00000006
+P1PRSC1                           00000001
+P1PRSC2                           00000002
+P1PRSC3                           00000003
+P1PRSC4                           00000004
+P1PRSIN                           00000007
+P1PRST                            00000000
+P1REBM0                           00000000
+P1REBM1                           00000001
+P1REBSC1                          00000001
+P1REBSC2                          00000002
+P1REBSC3                          00000003
+P1REBSC4                          00000004
+P1REBSIN                          00000007
+P1SSYNC                           00000007
+P1STRA                            00000000
+P1STRB                            00000001
+P1STRC                            00000002
+P1STRD                            00000003
+P1STRE                            00000004
+P1STRF                            00000005
+P1SYNC0                           00000000
+P1SYNC1                           00000001
+P1SYNC2                           00000002
+P1TDCIE                           00000005
+P1TDCIF                           00000001
+P1TOVIE                           00000007
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 35
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P1TOVIF                           00000003
+P1TPHIE                           00000006
+P1TPHIF                           00000002
+P1TPRIE                           00000004
+P1TPRIF                           00000000
+P2ARSEN                           00000005
+P2ASDEN                           00000006
+P2ASDLA                           00000000
+P2ASDLB                           00000001
+P2ASDOV                           00000000
+P2ASDSC1                          00000001
+P2ASDSC2                          00000002
+P2ASDSC3                          00000003
+P2ASDSC4                          00000004
+P2ASDSIN                          00000007
+P2ASE                             00000007
+P2CPRE0                           00000004
+P2CPRE1                           00000005
+P2CSRC0                           00000000
+P2CSRC1                           00000001
+P2DBFE                            00000005
+P2DBRE                            00000004
+P2DCPOL                           00000005
+P2DCSC1                           00000001
+P2DCSC2                           00000002
+P2DCSC3                           00000003
+P2DCSC4                           00000004
+P2DCSIN                           00000007
+P2DCST                            00000000
+P2FEBM0                           00000004
+P2FEBM1                           00000005
+P2FEBSC1                          00000001
+P2FEBSC2                          00000002
+P2FEBSC3                          00000003
+P2FEBSC4                          00000004
+P2FEBSIN                          00000007
+P2HSMEN                           00000000
+P2INPOL                           00000006
+P2LSMEN                           00000001
+P2MDLBIT                          00000005
+P2MDLEN                           00000007
+P2MDLPOL                          00000006
+P2MODE0                           00000000
+P2MODE1                           00000001
+P2MODE2                           00000002
+P2MODE3                           00000003
+P2MSRC0                           00000000
+P2MSRC1                           00000001
+P2MSRC2                           00000002
+P2MSRC3                           00000003
+P2OEA                             00000000
+P2OEB                             00000001
+P2PHSC1                           00000001
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 36
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P2PHSC2                           00000002
+P2PHSC3                           00000003
+P2PHSC4                           00000004
+P2PHSIN                           00000007
+P2PHST                            00000000
+P2POFST                           00000007
+P2POLA                            00000000
+P2POLB                            00000001
+P2PRPOL                           00000006
+P2PRSC1                           00000001
+P2PRSC2                           00000002
+P2PRSC3                           00000003
+P2PRSC4                           00000004
+P2PRSIN                           00000007
+P2PRST                            00000000
+P2REBM0                           00000000
+P2REBM1                           00000001
+P2REBSC1                          00000001
+P2REBSC2                          00000002
+P2REBSC3                          00000003
+P2REBSC4                          00000004
+P2REBSIN                          00000007
+P2SSYNC                           00000007
+P2STRA                            00000000
+P2STRB                            00000001
+P2SYNC0                           00000000
+P2SYNC1                           00000001
+P2SYNC2                           00000002
+P2TDCIE                           00000005
+P2TDCIF                           00000001
+P2TOVIE                           00000007
+P2TOVIF                           00000003
+P2TPHIE                           00000006
+P2TPHIF                           00000002
+P2TPRIE                           00000004
+P2TPRIF                           00000000
+P3ARSEN                           00000005
+P3ASDEN                           00000006
+P3ASDLA                           00000000
+P3ASDLB                           00000001
+P3ASDLC                           00000002
+P3ASDLD                           00000003
+P3ASDLE                           00000004
+P3ASDLF                           00000005
+P3ASDOV                           00000000
+P3ASDSC1                          00000001
+P3ASDSC2                          00000002
+P3ASDSC3                          00000003
+P3ASDSC4                          00000004
+P3ASDSIN                          00000007
+P3ASE                             00000007
+P3CPRE0                           00000004
+P3CPRE1                           00000005
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 37
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P3CSRC0                           00000000
+P3CSRC1                           00000001
+P3DBFE                            00000005
+P3DBRE                            00000004
+P3DCPOL                           00000005
+P3DCSC1                           00000001
+P3DCSC2                           00000002
+P3DCSC3                           00000003
+P3DCSC4                           00000004
+P3DCSIN                           00000007
+P3DCST                            00000000
+P3FEBM0                           00000004
+P3FEBM1                           00000005
+P3FEBSC1                          00000001
+P3FEBSC2                          00000002
+P3FEBSC3                          00000003
+P3FEBSC4                          00000004
+P3FEBSIN                          00000007
+P3HSMEN                           00000000
+P3INPOL                           00000006
+P3LSMEN                           00000001
+P3MDLBIT                          00000005
+P3MDLEN                           00000007
+P3MDLPOL                          00000006
+P3MODE0                           00000000
+P3MODE1                           00000001
+P3MODE2                           00000002
+P3MODE3                           00000003
+P3MSRC0                           00000000
+P3MSRC1                           00000001
+P3MSRC2                           00000002
+P3MSRC3                           00000003
+P3OEA                             00000000
+P3OEB                             00000001
+P3OEC                             00000002
+P3OED                             00000003
+P3OEE                             00000004
+P3OEF                             00000005
+P3PHSC1                           00000001
+P3PHSC2                           00000002
+P3PHSC3                           00000003
+P3PHSC4                           00000004
+P3PHSIN                           00000007
+P3PHST                            00000000
+P3POFST                           00000007
+P3POLA                            00000000
+P3POLB                            00000001
+P3POLC                            00000002
+P3POLD                            00000003
+P3POLE                            00000004
+P3POLF                            00000005
+P3PRPOL                           00000006
+P3PRSC1                           00000001
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 38
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P3PRSC2                           00000002
+P3PRSC3                           00000003
+P3PRSC4                           00000004
+P3PRSIN                           00000007
+P3PRST                            00000000
+P3REBM0                           00000000
+P3REBM1                           00000001
+P3REBSC1                          00000001
+P3REBSC2                          00000002
+P3REBSC3                          00000003
+P3REBSC4                          00000004
+P3REBSIN                          00000007
+P3SSYNC                           00000007
+P3STRA                            00000000
+P3STRB                            00000001
+P3STRC                            00000002
+P3STRD                            00000003
+P3STRE                            00000004
+P3STRF                            00000005
+P3SYNC0                           00000000
+P3SYNC1                           00000001
+P3SYNC2                           00000002
+P3TDCIE                           00000005
+P3TDCIF                           00000001
+P3TOVIE                           00000007
+P3TOVIF                           00000003
+P3TPHIE                           00000006
+P3TPHIF                           00000002
+P3TPRIE                           00000004
+P3TPRIF                           00000000
+P4ARSEN                           00000005
+P4ASDEN                           00000006
+P4ASDLA                           00000000
+P4ASDLB                           00000001
+P4ASDOV                           00000000
+P4ASDSC1                          00000001
+P4ASDSC2                          00000002
+P4ASDSC3                          00000003
+P4ASDSC4                          00000004
+P4ASDSIN                          00000007
+P4ASE                             00000007
+P4CPRE0                           00000004
+P4CPRE1                           00000005
+P4CSRC0                           00000000
+P4CSRC1                           00000001
+P4DBFE                            00000005
+P4DBRE                            00000004
+P4DCPOL                           00000005
+P4DCSC1                           00000001
+P4DCSC2                           00000002
+P4DCSC3                           00000003
+P4DCSC4                           00000004
+P4DCSIN                           00000007
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 39
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P4DCST                            00000000
+P4FEBM0                           00000004
+P4FEBM1                           00000005
+P4FEBSC1                          00000001
+P4FEBSC2                          00000002
+P4FEBSC3                          00000003
+P4FEBSC4                          00000004
+P4FEBSIN                          00000007
+P4HSMEN                           00000000
+P4INPOL                           00000006
+P4LSMEN                           00000001
+P4MDLBIT                          00000005
+P4MDLEN                           00000007
+P4MDLPOL                          00000006
+P4MODE0                           00000000
+P4MODE1                           00000001
+P4MODE2                           00000002
+P4MODE3                           00000003
+P4MSRC0                           00000000
+P4MSRC1                           00000001
+P4MSRC2                           00000002
+P4MSRC3                           00000003
+P4OEA                             00000000
+P4OEB                             00000001
+P4PHSC1                           00000001
+P4PHSC2                           00000002
+P4PHSC3                           00000003
+P4PHSC4                           00000004
+P4PHSIN                           00000007
+P4PHST                            00000000
+P4POFST                           00000007
+P4POLA                            00000000
+P4POLB                            00000001
+P4PRPOL                           00000006
+P4PRSC1                           00000001
+P4PRSC2                           00000002
+P4PRSC3                           00000003
+P4PRSC4                           00000004
+P4PRSIN                           00000007
+P4PRST                            00000000
+P4REBM0                           00000000
+P4REBM1                           00000001
+P4REBSC1                          00000001
+P4REBSC2                          00000002
+P4REBSC3                          00000003
+P4REBSC4                          00000004
+P4REBSIN                          00000007
+P4SSYNC                           00000007
+P4STRA                            00000000
+P4STRB                            00000001
+P4SYNC0                           00000000
+P4SYNC1                           00000001
+P4SYNC2                           00000002
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 40
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+P4TDCIE                           00000005
+P4TDCIF                           00000001
+P4TOVIE                           00000007
+P4TOVIF                           00000003
+P4TPHIE                           00000006
+P4TPHIF                           00000002
+P4TPRIE                           00000004
+P4TPRIF                           00000000
+PACKET_1                          00000042
+PACKET_2                          00000045
+PACKET_3                          00000048
+PCH0                              00000000
+PCH1                              00000001
+PCH2                              00000002
+PCIE                              00000006
+PCL                               00000002
+PCLATH                            0000000A
+PCLATH_SHAD                       00000FE7
+PCON                              00000096
+PEIE                              00000006
+PEN                               00000002
+PIE1                              00000091
+PIE2                              00000092
+PIE3                              00000093
+PIE4                              00000094
+PIR1                              00000011
+PIR2                              00000012
+PIR3                              00000013
+PIR4                              00000014
+PLLR                              00000006
+PMSC3TIE                          00000006
+PORTA                             0000000C
+PORTB                             0000000D
+PORTC                             0000000E
+PORTD                             0000000F
+PORTE                             00000010
+PR2                               0000001B
+PS0                               00000000
+PS1                               00000001
+PS2                               00000002
+PSA                               00000003
+PSMC1ASDC                         00000E9D
+PSMC1ASDL                         00000E9E
+PSMC1ASDS                         00000E9F
+PSMC1BLKF                         00000EAC
+PSMC1BLKF0                        00000000
+PSMC1BLKF1                        00000001
+PSMC1BLKF2                        00000002
+PSMC1BLKF3                        00000003
+PSMC1BLKF4                        00000004
+PSMC1BLKF5                        00000005
+PSMC1BLKF6                        00000006
+PSMC1BLKF7                        00000007
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 41
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC1BLKR                         00000EAB
+PSMC1BLKR0                        00000000
+PSMC1BLKR1                        00000001
+PSMC1BLKR2                        00000002
+PSMC1BLKR3                        00000003
+PSMC1BLKR4                        00000004
+PSMC1BLKR5                        00000005
+PSMC1BLKR6                        00000006
+PSMC1BLKR7                        00000007
+PSMC1BLNK                         00000E97
+PSMC1CLK                          00000E94
+PSMC1CON                          00000E91
+PSMC1DBF                          00000EAA
+PSMC1DBF0                         00000000
+PSMC1DBF1                         00000001
+PSMC1DBF2                         00000002
+PSMC1DBF3                         00000003
+PSMC1DBF4                         00000004
+PSMC1DBF5                         00000005
+PSMC1DBF6                         00000006
+PSMC1DBF7                         00000007
+PSMC1DBR                          00000EA9
+PSMC1DBR0                         00000000
+PSMC1DBR1                         00000001
+PSMC1DBR2                         00000002
+PSMC1DBR3                         00000003
+PSMC1DBR4                         00000004
+PSMC1DBR5                         00000005
+PSMC1DBR6                         00000006
+PSMC1DBR7                         00000007
+PSMC1DC                           00000EA3
+PSMC1DC0                          00000000
+PSMC1DC1                          00000001
+PSMC1DC10                         00000002
+PSMC1DC11                         00000003
+PSMC1DC12                         00000004
+PSMC1DC13                         00000005
+PSMC1DC14                         00000006
+PSMC1DC15                         00000007
+PSMC1DC2                          00000002
+PSMC1DC3                          00000003
+PSMC1DC4                          00000004
+PSMC1DC5                          00000005
+PSMC1DC6                          00000006
+PSMC1DC7                          00000007
+PSMC1DC8                          00000000
+PSMC1DC9                          00000001
+PSMC1DCH                          00000EA4
+PSMC1DCL                          00000EA3
+PSMC1DCS                          00000E9B
+PSMC1EN                           00000007
+PSMC1FEBS                         00000E99
+PSMC1FFA                          00000EAD
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 42
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC1FFA0                         00000000
+PSMC1FFA1                         00000001
+PSMC1FFA2                         00000002
+PSMC1FFA3                         00000003
+PSMC1INT                          00000EA0
+PSMC1LD                           00000006
+PSMC1MDL                          00000E92
+PSMC1OEN                          00000E95
+PSMC1PH                           00000EA1
+PSMC1PH0                          00000000
+PSMC1PH1                          00000001
+PSMC1PH10                         00000002
+PSMC1PH11                         00000003
+PSMC1PH12                         00000004
+PSMC1PH13                         00000005
+PSMC1PH14                         00000006
+PSMC1PH15                         00000007
+PSMC1PH2                          00000002
+PSMC1PH3                          00000003
+PSMC1PH4                          00000004
+PSMC1PH5                          00000005
+PSMC1PH6                          00000006
+PSMC1PH7                          00000007
+PSMC1PH8                          00000000
+PSMC1PH9                          00000001
+PSMC1PHH                          00000EA2
+PSMC1PHL                          00000EA1
+PSMC1PHS                          00000E9A
+PSMC1POL                          00000E96
+PSMC1PR                           00000EA5
+PSMC1PR0                          00000000
+PSMC1PR1                          00000001
+PSMC1PR10                         00000002
+PSMC1PR11                         00000003
+PSMC1PR12                         00000004
+PSMC1PR13                         00000005
+PSMC1PR14                         00000006
+PSMC1PR15                         00000007
+PSMC1PR2                          00000002
+PSMC1PR3                          00000003
+PSMC1PR4                          00000004
+PSMC1PR5                          00000005
+PSMC1PR6                          00000006
+PSMC1PR7                          00000007
+PSMC1PR8                          00000000
+PSMC1PR9                          00000001
+PSMC1PRH                          00000EA6
+PSMC1PRL                          00000EA5
+PSMC1PRS                          00000E9C
+PSMC1REBS                         00000E98
+PSMC1SIE                          00000000
+PSMC1SIF                          00000000
+PSMC1STR0                         00000EAE
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 43
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC1STR1                         00000EAF
+PSMC1SYNC                         00000E93
+PSMC1TIE                          00000004
+PSMC1TIF                          00000004
+PSMC1TMR                          00000EA7
+PSMC1TMR0                         00000000
+PSMC1TMR1                         00000001
+PSMC1TMR10                        00000002
+PSMC1TMR11                        00000003
+PSMC1TMR12                        00000004
+PSMC1TMR13                        00000005
+PSMC1TMR14                        00000006
+PSMC1TMR15                        00000007
+PSMC1TMR2                         00000002
+PSMC1TMR3                         00000003
+PSMC1TMR4                         00000004
+PSMC1TMR5                         00000005
+PSMC1TMR6                         00000006
+PSMC1TMR7                         00000007
+PSMC1TMR8                         00000000
+PSMC1TMR9                         00000001
+PSMC1TMRH                         00000EA8
+PSMC1TMRL                         00000EA7
+PSMC2ASDC                         00000EBD
+PSMC2ASDL                         00000EBE
+PSMC2ASDS                         00000EBF
+PSMC2BLKF                         00000ECC
+PSMC2BLKF0                        00000000
+PSMC2BLKF1                        00000001
+PSMC2BLKF2                        00000002
+PSMC2BLKF3                        00000003
+PSMC2BLKF4                        00000004
+PSMC2BLKF5                        00000005
+PSMC2BLKF6                        00000006
+PSMC2BLKF7                        00000007
+PSMC2BLKR                         00000ECB
+PSMC2BLKR0                        00000000
+PSMC2BLKR1                        00000001
+PSMC2BLKR2                        00000002
+PSMC2BLKR3                        00000003
+PSMC2BLKR4                        00000004
+PSMC2BLKR5                        00000005
+PSMC2BLKR6                        00000006
+PSMC2BLKR7                        00000007
+PSMC2BLNK                         00000EB7
+PSMC2CLK                          00000EB4
+PSMC2CON                          00000EB1
+PSMC2DBF                          00000ECA
+PSMC2DBF0                         00000000
+PSMC2DBF1                         00000001
+PSMC2DBF2                         00000002
+PSMC2DBF3                         00000003
+PSMC2DBF4                         00000004
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 44
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC2DBF5                         00000005
+PSMC2DBF6                         00000006
+PSMC2DBF7                         00000007
+PSMC2DBR                          00000EC9
+PSMC2DBR0                         00000000
+PSMC2DBR1                         00000001
+PSMC2DBR2                         00000002
+PSMC2DBR3                         00000003
+PSMC2DBR4                         00000004
+PSMC2DBR5                         00000005
+PSMC2DBR6                         00000006
+PSMC2DBR7                         00000007
+PSMC2DC                           00000EC3
+PSMC2DC0                          00000000
+PSMC2DC1                          00000001
+PSMC2DC10                         00000002
+PSMC2DC11                         00000003
+PSMC2DC12                         00000004
+PSMC2DC13                         00000005
+PSMC2DC14                         00000006
+PSMC2DC15                         00000007
+PSMC2DC2                          00000002
+PSMC2DC3                          00000003
+PSMC2DC4                          00000004
+PSMC2DC5                          00000005
+PSMC2DC6                          00000006
+PSMC2DC7                          00000007
+PSMC2DC8                          00000000
+PSMC2DC9                          00000001
+PSMC2DCH                          00000EC4
+PSMC2DCL                          00000EC3
+PSMC2DCS                          00000EBB
+PSMC2EN                           00000007
+PSMC2FEBS                         00000EB9
+PSMC2FFA                          00000ECD
+PSMC2FFA0                         00000000
+PSMC2FFA1                         00000001
+PSMC2FFA2                         00000002
+PSMC2FFA3                         00000003
+PSMC2INT                          00000EC0
+PSMC2LD                           00000006
+PSMC2MDL                          00000EB2
+PSMC2OEN                          00000EB5
+PSMC2PH                           00000EC1
+PSMC2PH0                          00000000
+PSMC2PH1                          00000001
+PSMC2PH10                         00000002
+PSMC2PH11                         00000003
+PSMC2PH12                         00000004
+PSMC2PH13                         00000005
+PSMC2PH14                         00000006
+PSMC2PH15                         00000007
+PSMC2PH2                          00000002
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 45
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC2PH3                          00000003
+PSMC2PH4                          00000004
+PSMC2PH5                          00000005
+PSMC2PH6                          00000006
+PSMC2PH7                          00000007
+PSMC2PH8                          00000000
+PSMC2PH9                          00000001
+PSMC2PHH                          00000EC2
+PSMC2PHL                          00000EC1
+PSMC2PHS                          00000EBA
+PSMC2POL                          00000EB6
+PSMC2PR                           00000EC5
+PSMC2PR0                          00000000
+PSMC2PR1                          00000001
+PSMC2PR10                         00000002
+PSMC2PR11                         00000003
+PSMC2PR12                         00000004
+PSMC2PR13                         00000005
+PSMC2PR14                         00000006
+PSMC2PR15                         00000007
+PSMC2PR2                          00000002
+PSMC2PR3                          00000003
+PSMC2PR4                          00000004
+PSMC2PR5                          00000005
+PSMC2PR6                          00000006
+PSMC2PR7                          00000007
+PSMC2PR8                          00000000
+PSMC2PR9                          00000001
+PSMC2PRH                          00000EC6
+PSMC2PRL                          00000EC5
+PSMC2PRS                          00000EBC
+PSMC2REBS                         00000EB8
+PSMC2SIE                          00000001
+PSMC2SIF                          00000001
+PSMC2STR0                         00000ECE
+PSMC2STR1                         00000ECF
+PSMC2SYNC                         00000EB3
+PSMC2TIE                          00000005
+PSMC2TIF                          00000005
+PSMC2TMR                          00000EC7
+PSMC2TMR0                         00000000
+PSMC2TMR1                         00000001
+PSMC2TMR10                        00000002
+PSMC2TMR11                        00000003
+PSMC2TMR12                        00000004
+PSMC2TMR13                        00000005
+PSMC2TMR14                        00000006
+PSMC2TMR15                        00000007
+PSMC2TMR2                         00000002
+PSMC2TMR3                         00000003
+PSMC2TMR4                         00000004
+PSMC2TMR5                         00000005
+PSMC2TMR6                         00000006
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 46
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC2TMR7                         00000007
+PSMC2TMR8                         00000000
+PSMC2TMR9                         00000001
+PSMC2TMRH                         00000EC8
+PSMC2TMRL                         00000EC7
+PSMC3ASDC                         00000EDD
+PSMC3ASDL                         00000EDE
+PSMC3ASDS                         00000EDF
+PSMC3BLKF                         00000EEC
+PSMC3BLKF0                        00000000
+PSMC3BLKF1                        00000001
+PSMC3BLKF2                        00000002
+PSMC3BLKF3                        00000003
+PSMC3BLKF4                        00000004
+PSMC3BLKF5                        00000005
+PSMC3BLKF6                        00000006
+PSMC3BLKF7                        00000007
+PSMC3BLKR                         00000EEB
+PSMC3BLKR0                        00000000
+PSMC3BLKR1                        00000001
+PSMC3BLKR2                        00000002
+PSMC3BLKR3                        00000003
+PSMC3BLKR4                        00000004
+PSMC3BLKR5                        00000005
+PSMC3BLKR6                        00000006
+PSMC3BLKR7                        00000007
+PSMC3BLNK                         00000ED7
+PSMC3CLK                          00000ED4
+PSMC3CON                          00000ED1
+PSMC3DBF                          00000EEA
+PSMC3DBF0                         00000000
+PSMC3DBF1                         00000001
+PSMC3DBF2                         00000002
+PSMC3DBF3                         00000003
+PSMC3DBF4                         00000004
+PSMC3DBF5                         00000005
+PSMC3DBF6                         00000006
+PSMC3DBF7                         00000007
+PSMC3DBR                          00000EE9
+PSMC3DBR0                         00000000
+PSMC3DBR1                         00000001
+PSMC3DBR2                         00000002
+PSMC3DBR3                         00000003
+PSMC3DBR4                         00000004
+PSMC3DBR5                         00000005
+PSMC3DBR6                         00000006
+PSMC3DBR7                         00000007
+PSMC3DC                           00000EE3
+PSMC3DC0                          00000000
+PSMC3DC1                          00000001
+PSMC3DC10                         00000002
+PSMC3DC11                         00000003
+PSMC3DC12                         00000004
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 47
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC3DC13                         00000005
+PSMC3DC14                         00000006
+PSMC3DC15                         00000007
+PSMC3DC2                          00000002
+PSMC3DC3                          00000003
+PSMC3DC4                          00000004
+PSMC3DC5                          00000005
+PSMC3DC6                          00000006
+PSMC3DC7                          00000007
+PSMC3DC8                          00000000
+PSMC3DC9                          00000001
+PSMC3DCH                          00000EE4
+PSMC3DCL                          00000EE3
+PSMC3DCS                          00000EDB
+PSMC3EN                           00000007
+PSMC3FEBS                         00000ED9
+PSMC3FFA                          00000EED
+PSMC3FFA0                         00000000
+PSMC3FFA1                         00000001
+PSMC3FFA2                         00000002
+PSMC3FFA3                         00000003
+PSMC3INT                          00000EE0
+PSMC3LD                           00000006
+PSMC3MDL                          00000ED2
+PSMC3OEN                          00000ED5
+PSMC3PH                           00000EE1
+PSMC3PH0                          00000000
+PSMC3PH1                          00000001
+PSMC3PH10                         00000002
+PSMC3PH11                         00000003
+PSMC3PH12                         00000004
+PSMC3PH13                         00000005
+PSMC3PH14                         00000006
+PSMC3PH15                         00000007
+PSMC3PH2                          00000002
+PSMC3PH3                          00000003
+PSMC3PH4                          00000004
+PSMC3PH5                          00000005
+PSMC3PH6                          00000006
+PSMC3PH7                          00000007
+PSMC3PH8                          00000000
+PSMC3PH9                          00000001
+PSMC3PHH                          00000EE2
+PSMC3PHL                          00000EE1
+PSMC3PHS                          00000EDA
+PSMC3POL                          00000ED6
+PSMC3PR                           00000EE5
+PSMC3PR0                          00000000
+PSMC3PR1                          00000001
+PSMC3PR10                         00000002
+PSMC3PR11                         00000003
+PSMC3PR12                         00000004
+PSMC3PR13                         00000005
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 48
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC3PR14                         00000006
+PSMC3PR15                         00000007
+PSMC3PR2                          00000002
+PSMC3PR3                          00000003
+PSMC3PR4                          00000004
+PSMC3PR5                          00000005
+PSMC3PR6                          00000006
+PSMC3PR7                          00000007
+PSMC3PR8                          00000000
+PSMC3PR9                          00000001
+PSMC3PRH                          00000EE6
+PSMC3PRL                          00000EE5
+PSMC3PRS                          00000EDC
+PSMC3REBS                         00000ED8
+PSMC3SIE                          00000002
+PSMC3SIF                          00000002
+PSMC3STR0                         00000EEE
+PSMC3STR1                         00000EEF
+PSMC3SYNC                         00000ED3
+PSMC3TIE                          00000006
+PSMC3TIF                          00000006
+PSMC3TMR                          00000EE7
+PSMC3TMR0                         00000000
+PSMC3TMR1                         00000001
+PSMC3TMR10                        00000002
+PSMC3TMR11                        00000003
+PSMC3TMR12                        00000004
+PSMC3TMR13                        00000005
+PSMC3TMR14                        00000006
+PSMC3TMR15                        00000007
+PSMC3TMR2                         00000002
+PSMC3TMR3                         00000003
+PSMC3TMR4                         00000004
+PSMC3TMR5                         00000005
+PSMC3TMR6                         00000006
+PSMC3TMR7                         00000007
+PSMC3TMR8                         00000000
+PSMC3TMR9                         00000001
+PSMC3TMRH                         00000EE8
+PSMC3TMRL                         00000EE7
+PSMC4ASDC                         00000F1D
+PSMC4ASDL                         00000F1E
+PSMC4ASDS                         00000F1F
+PSMC4BLKF                         00000F2C
+PSMC4BLKF0                        00000000
+PSMC4BLKF1                        00000001
+PSMC4BLKF2                        00000002
+PSMC4BLKF3                        00000003
+PSMC4BLKF4                        00000004
+PSMC4BLKF5                        00000005
+PSMC4BLKF6                        00000006
+PSMC4BLKF7                        00000007
+PSMC4BLKR                         00000F2B
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 49
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC4BLKR0                        00000000
+PSMC4BLKR1                        00000001
+PSMC4BLKR2                        00000002
+PSMC4BLKR3                        00000003
+PSMC4BLKR4                        00000004
+PSMC4BLKR5                        00000005
+PSMC4BLKR6                        00000006
+PSMC4BLKR7                        00000007
+PSMC4BLNK                         00000F17
+PSMC4CLK                          00000F14
+PSMC4CON                          00000F11
+PSMC4DBF                          00000F2A
+PSMC4DBF0                         00000000
+PSMC4DBF1                         00000001
+PSMC4DBF2                         00000002
+PSMC4DBF3                         00000003
+PSMC4DBF4                         00000004
+PSMC4DBF5                         00000005
+PSMC4DBF6                         00000006
+PSMC4DBF7                         00000007
+PSMC4DBR                          00000F29
+PSMC4DBR0                         00000000
+PSMC4DBR1                         00000001
+PSMC4DBR2                         00000002
+PSMC4DBR3                         00000003
+PSMC4DBR4                         00000004
+PSMC4DBR5                         00000005
+PSMC4DBR6                         00000006
+PSMC4DBR7                         00000007
+PSMC4DC                           00000F23
+PSMC4DC0                          00000000
+PSMC4DC1                          00000001
+PSMC4DC10                         00000002
+PSMC4DC11                         00000003
+PSMC4DC12                         00000004
+PSMC4DC13                         00000005
+PSMC4DC14                         00000006
+PSMC4DC15                         00000007
+PSMC4DC2                          00000002
+PSMC4DC3                          00000003
+PSMC4DC4                          00000004
+PSMC4DC5                          00000005
+PSMC4DC6                          00000006
+PSMC4DC7                          00000007
+PSMC4DC8                          00000000
+PSMC4DC9                          00000001
+PSMC4DCH                          00000F24
+PSMC4DCL                          00000F23
+PSMC4DCS                          00000F1B
+PSMC4EN                           00000007
+PSMC4FEBS                         00000F19
+PSMC4FFA                          00000F2D
+PSMC4FFA0                         00000000
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 50
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC4FFA1                         00000001
+PSMC4FFA2                         00000002
+PSMC4FFA3                         00000003
+PSMC4INT                          00000F20
+PSMC4LD                           00000006
+PSMC4MDL                          00000F12
+PSMC4OEN                          00000F15
+PSMC4PH                           00000F21
+PSMC4PH0                          00000000
+PSMC4PH1                          00000001
+PSMC4PH10                         00000002
+PSMC4PH11                         00000003
+PSMC4PH12                         00000004
+PSMC4PH13                         00000005
+PSMC4PH14                         00000006
+PSMC4PH15                         00000007
+PSMC4PH2                          00000002
+PSMC4PH3                          00000003
+PSMC4PH4                          00000004
+PSMC4PH5                          00000005
+PSMC4PH6                          00000006
+PSMC4PH7                          00000007
+PSMC4PH8                          00000000
+PSMC4PH9                          00000001
+PSMC4PHH                          00000F22
+PSMC4PHL                          00000F21
+PSMC4PHS                          00000F1A
+PSMC4POL                          00000F16
+PSMC4PR                           00000F25
+PSMC4PR0                          00000000
+PSMC4PR1                          00000001
+PSMC4PR10                         00000002
+PSMC4PR11                         00000003
+PSMC4PR12                         00000004
+PSMC4PR13                         00000005
+PSMC4PR14                         00000006
+PSMC4PR15                         00000007
+PSMC4PR2                          00000002
+PSMC4PR3                          00000003
+PSMC4PR4                          00000004
+PSMC4PR5                          00000005
+PSMC4PR6                          00000006
+PSMC4PR7                          00000007
+PSMC4PR8                          00000000
+PSMC4PR9                          00000001
+PSMC4PRH                          00000F26
+PSMC4PRL                          00000F25
+PSMC4PRS                          00000F1C
+PSMC4REBS                         00000F18
+PSMC4SIE                          00000003
+PSMC4SIF                          00000003
+PSMC4STR0                         00000F2E
+PSMC4STR1                         00000F2F
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 51
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PSMC4SYNC                         00000F13
+PSMC4TIE                          00000007
+PSMC4TIF                          00000007
+PSMC4TMR                          00000F27
+PSMC4TMR0                         00000000
+PSMC4TMR1                         00000001
+PSMC4TMR10                        00000002
+PSMC4TMR11                        00000003
+PSMC4TMR12                        00000004
+PSMC4TMR13                        00000005
+PSMC4TMR14                        00000006
+PSMC4TMR15                        00000007
+PSMC4TMR2                         00000002
+PSMC4TMR3                         00000003
+PSMC4TMR4                         00000004
+PSMC4TMR5                         00000005
+PSMC4TMR6                         00000006
+PSMC4TMR7                         00000007
+PSMC4TMR8                         00000000
+PSMC4TMR9                         00000001
+PSMC4TMRH                         00000F28
+PSMC4TMRL                         00000F27
+RA0                               00000000
+RA1                               00000001
+RA2                               00000002
+RA3                               00000003
+RA4                               00000004
+RA5                               00000005
+RA6                               00000006
+RA7                               00000007
+RB0                               00000000
+RB1                               00000001
+RB2                               00000002
+RB3                               00000003
+RB4                               00000004
+RB5                               00000005
+RB6                               00000006
+RB7                               00000007
+RC0                               00000000
+RC1                               00000001
+RC1REG                            00000199
+RC1STA                            0000019D
+RC2                               00000002
+RC3                               00000003
+RC4                               00000004
+RC5                               00000005
+RC6                               00000006
+RC7                               00000007
+RCEN                              00000003
+RCIDL                             00000006
+RCIE                              00000005
+RCIF                              00000005
+RCREG                             00000199
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 52
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+RCREG1                            00000199
+RCSTA                             0000019D
+RCSTA1                            0000019D
+RD                                00000000
+RD0                               00000000
+RD1                               00000001
+RD2                               00000002
+RD3                               00000003
+RD4                               00000004
+RD5                               00000005
+RD6                               00000006
+RD7                               00000007
+RE0                               00000000
+RE1                               00000001
+RE2                               00000002
+RE3                               00000003
+ROBOT_ADDR                        00000021
+RSEN                              00000001
+RX9                               00000006
+RX9D                              00000000
+RXSEL                             00000001
+R_NOT_W                           00000002
+S                                 00000003
+SBCDE                             00000002
+SBOREN                            00000007
+SCIE                              00000005
+SCKP                              00000004
+SCKSEL                            00000004
+SCS0                              00000000
+SCS1                              00000001
+SDAHT                             00000003
+SDISEL                            00000003
+SDOSEL                            00000005
+SEN                               00000000
+SENDB                             00000003
+SEND_DATA_PACKET                  00000000
+SETUP                             00000005
+SET_ROBOT_ADDR                    00000025
+SLRCONA                           0000030C
+SLRCONA0                          00000000
+SLRCONA1                          00000001
+SLRCONA2                          00000002
+SLRCONA3                          00000003
+SLRCONA4                          00000004
+SLRCONA5                          00000005
+SLRCONA6                          00000006
+SLRCONA7                          00000007
+SLRCONB                           0000030D
+SLRCONB0                          00000000
+SLRCONB1                          00000001
+SLRCONB2                          00000002
+SLRCONB3                          00000003
+SLRCONB4                          00000004
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 53
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+SLRCONB5                          00000005
+SLRCONB6                          00000006
+SLRCONB7                          00000007
+SLRCONC                           0000030E
+SLRCONC0                          00000000
+SLRCONC1                          00000001
+SLRCONC2                          00000002
+SLRCONC3                          00000003
+SLRCONC4                          00000004
+SLRCONC5                          00000005
+SLRCONC6                          00000006
+SLRCONC7                          00000007
+SLRCOND                           0000030F
+SLRCOND0                          00000000
+SLRCOND1                          00000001
+SLRCOND2                          00000002
+SLRCOND3                          00000003
+SLRCOND4                          00000004
+SLRCOND5                          00000005
+SLRCOND6                          00000006
+SLRCOND7                          00000007
+SLRCONE                           00000310
+SLRCONE0                          00000000
+SLRCONE1                          00000001
+SLRCONE2                          00000002
+SMP                               00000007
+SP                                00000006
+SP1BRG                            0000019B
+SP1BRGH                           0000019C
+SP1BRGL                           0000019B
+SPBRG                             0000019B
+SPBRG1                            0000019B
+SPBRGH                            0000019C
+SPBRGH1                           0000019C
+SPBRGL                            0000019B
+SPEN                              00000007
+SPLLEN                            00000007
+SREN                              00000005
+SSP1ADD                           00000212
+SSP1ADD0                          00000000
+SSP1ADD1                          00000001
+SSP1ADD2                          00000002
+SSP1ADD3                          00000003
+SSP1ADD4                          00000004
+SSP1ADD5                          00000005
+SSP1ADD6                          00000006
+SSP1ADD7                          00000007
+SSP1BUF                           00000211
+SSP1BUF0                          00000000
+SSP1BUF1                          00000001
+SSP1BUF2                          00000002
+SSP1BUF3                          00000003
+SSP1BUF4                          00000004
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 54
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+SSP1BUF5                          00000005
+SSP1BUF6                          00000006
+SSP1BUF7                          00000007
+SSP1CON                           00000215
+SSP1CON1                          00000215
+SSP1CON2                          00000216
+SSP1CON3                          00000217
+SSP1IE                            00000003
+SSP1IF                            00000003
+SSP1MSK                           00000213
+SSP1MSK0                          00000000
+SSP1MSK1                          00000001
+SSP1MSK2                          00000002
+SSP1MSK3                          00000003
+SSP1MSK4                          00000004
+SSP1MSK5                          00000005
+SSP1MSK6                          00000006
+SSP1MSK7                          00000007
+SSP1STAT                          00000214
+SSPADD                            00000212
+SSPBUF                            00000211
+SSPCON                            00000215
+SSPCON1                           00000215
+SSPCON2                           00000216
+SSPCON3                           00000217
+SSPEN                             00000005
+SSPM0                             00000000
+SSPM1                             00000001
+SSPM2                             00000002
+SSPM3                             00000003
+SSPMSK                            00000213
+SSPOV                             00000006
+SSPSTAT                           00000214
+STATUS                            00000003
+STATUS_SHAD                       00000FE4
+STKOVF                            00000007
+STKPTR                            00000FED
+STKUNF                            00000006
+SWDTEN                            00000000
+SYNC                              00000004
+T0CS                              00000005
+T0IE                              00000005
+T0IF                              00000002
+T0SE                              00000004
+T1CKPS0                           00000004
+T1CKPS1                           00000005
+T1CON                             00000018
+T1GCON                            00000019
+T1GGO                             00000003
+T1GPOL                            00000006
+T1GSPM                            00000004
+T1GSS0                            00000000
+T1GSS1                            00000001
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 55
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+T1GTM                             00000005
+T1GVAL                            00000002
+T1OSCEN                           00000003
+T1OSCR                            00000007
+T2CKPS0                           00000000
+T2CKPS1                           00000001
+T2CON                             0000001C
+T2OUTPS0                          00000003
+T2OUTPS1                          00000004
+T2OUTPS2                          00000005
+T2OUTPS3                          00000006
+TIMERCOUNT                        00000020
+TMR0                              00000015
+TMR0CS                            00000005
+TMR0IE                            00000005
+TMR0IF                            00000002
+TMR0SE                            00000004
+TMR1                              00000016
+TMR1CS0                           00000006
+TMR1CS1                           00000007
+TMR1GE                            00000007
+TMR1GIE                           00000007
+TMR1GIF                           00000007
+TMR1H                             00000017
+TMR1IE                            00000000
+TMR1IF                            00000000
+TMR1L                             00000016
+TMR1ON                            00000000
+TMR2                              0000001A
+TMR2IE                            00000001
+TMR2IF                            00000001
+TMR2ON                            00000002
+TMR2_INTERRUPT                    00000017
+TMR2_INTERRUPT_END                0000001A
+TOSH                              00000FEF
+TOSL                              00000FEE
+TRIGSEL0                          00000004
+TRIGSEL1                          00000005
+TRIGSEL2                          00000006
+TRIGSEL3                          00000007
+TRISA                             0000008C
+TRISA0                            00000000
+TRISA1                            00000001
+TRISA2                            00000002
+TRISA3                            00000003
+TRISA4                            00000004
+TRISA5                            00000005
+TRISA6                            00000006
+TRISA7                            00000007
+TRISB                             0000008D
+TRISB0                            00000000
+TRISB1                            00000001
+TRISB2                            00000002
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 56
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TRISB3                            00000003
+TRISB4                            00000004
+TRISB5                            00000005
+TRISB6                            00000006
+TRISB7                            00000007
+TRISC                             0000008E
+TRISC0                            00000000
+TRISC1                            00000001
+TRISC2                            00000002
+TRISC3                            00000003
+TRISC4                            00000004
+TRISC5                            00000005
+TRISC6                            00000006
+TRISC7                            00000007
+TRISD                             0000008F
+TRISD0                            00000000
+TRISD1                            00000001
+TRISD2                            00000002
+TRISD3                            00000003
+TRISD4                            00000004
+TRISD5                            00000005
+TRISD6                            00000006
+TRISD7                            00000007
+TRISE                             00000090
+TRISE0                            00000000
+TRISE1                            00000001
+TRISE2                            00000002
+TRISE3                            00000003
+TRMT                              00000001
+TSEN                              00000005
+TSRNG                             00000004
+TUN0                              00000000
+TUN1                              00000001
+TUN2                              00000002
+TUN3                              00000003
+TUN4                              00000004
+TUN5                              00000005
+TX1REG                            0000019A
+TX1STA                            0000019E
+TX9                               00000006
+TX9D                              00000000
+TXEN                              00000005
+TXIE                              00000004
+TXIF                              00000004
+TXREG                             0000019A
+TXREG1                            0000019A
+TXSEL                             00000002
+TXSTA                             0000019E
+TXSTA1                            0000019E
+TX_ADDR                           0000002E
+TX_CMND                           0000002F
+TX_COUNT                          00000033
+TX_DATA_1                         00000030
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 57
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TX_DATA_2                         00000031
+TX_DATA_3                         00000032
+TX_HANDSHAKE                      0000002D
+UA                                00000001
+UPDATE_BAR_DISPLAY                0000002A
+W                                 00000000
+WCOL                              00000007
+WDTCON                            00000097
+WDTPS0                            00000001
+WDTPS1                            00000002
+WDTPS2                            00000003
+WDTPS3                            00000004
+WDTPS4                            00000005
+WPUA                              0000020C
+WPUA0                             00000000
+WPUA1                             00000001
+WPUA2                             00000002
+WPUA3                             00000003
+WPUA4                             00000004
+WPUA5                             00000005
+WPUA6                             00000006
+WPUA7                             00000007
+WPUB                              0000020D
+WPUB0                             00000000
+WPUB1                             00000001
+WPUB2                             00000002
+WPUB3                             00000003
+WPUB4                             00000004
+WPUB5                             00000005
+WPUB6                             00000006
+WPUB7                             00000007
+WPUC                              0000020E
+WPUC0                             00000000
+WPUC1                             00000001
+WPUC2                             00000002
+WPUC3                             00000003
+WPUC4                             00000004
+WPUC5                             00000005
+WPUC6                             00000006
+WPUC7                             00000007
+WPUD                              0000020F
+WPUD0                             00000000
+WPUD1                             00000001
+WPUD2                             00000002
+WPUD3                             00000003
+WPUD4                             00000004
+WPUD5                             00000005
+WPUD6                             00000006
+WPUD7                             00000007
+WPUE                              00000210
+WPUE0                             00000000
+WPUE1                             00000001
+WPUE2                             00000002
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 58
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+WPUE3                             00000003
+WR                                00000001
+WREG                              00000009
+WREG_SHAD                         00000FE5
+WREN                              00000002
+WRERR                             00000003
+WUE                               00000001
+Z                                 00000002
+Z_SHAD                            00000002
+_BOREN_NSLEEP                     00003DFF
+_BOREN_OFF                        000039FF
+_BOREN_ON                         00003FFF
+_BOREN_SBODEN                     00003BFF
+_BORV_HI                          00003BFF
+_BORV_LO                          00003FFF
+_CLKOUTEN_OFF                     00003FFF
+_CLKOUTEN_ON                      000037FF
+_CONFIG1                          00008007
+_CONFIG2                          00008008
+_CPD_OFF                          00003FFF
+_CPD_ON                           00003EFF
+_CP_OFF                           00003FFF
+_CP_ON                            00003F7F
+_DEVID1                           00008006
+_FCMEN_OFF                        00001FFF
+_FCMEN_ON                         00003FFF
+_FOSC_ECH                         00003FFF
+_FOSC_ECL                         00003FFD
+_FOSC_ECM                         00003FFE
+_FOSC_EXTRC                       00003FFB
+_FOSC_HS                          00003FFA
+_FOSC_INTOSC                      00003FFC
+_FOSC_LP                          00003FF8
+_FOSC_XT                          00003FF9
+_IDLOC0                           00008000
+_IDLOC1                           00008001
+_IDLOC2                           00008002
+_IDLOC3                           00008003
+_IESO_OFF                         00002FFF
+_IESO_ON                          00003FFF
+_LPBOR_OFF                        00003FFF
+_LPBOR_ON                         000037FF
+_LVP_OFF                          00001FFF
+_LVP_ON                           00003FFF
+_MCLRE_OFF                        00003FBF
+_MCLRE_ON                         00003FFF
+_PLLEN_OFF                        00003EFF
+_PLLEN_ON                         00003FFF
+_PWRTE_OFF                        00003FFF
+_PWRTE_ON                         00003FDF
+_STVREN_OFF                       00003DFF
+_STVREN_ON                        00003FFF
+_UART_CODE_0009                   00000009
+MPASM 5.84  UNIVERSAL_REMOTE_CONTROL_MAIN.AS   3-18-2026  10:13:29         PAGE 59
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+_UART_CODE_0010                   00000010
+_UART_CODE_0017                   00000017
+_UART_CODE_001E                   0000001E
+_UART_CODE_0025                   00000025
+_UART_CODE_002C                   0000002C
+_WDTE_NSLEEP                      00003FF7
+_WDTE_OFF                         00003FE7
+_WDTE_ON                          00003FFF
+_WDTE_SWDTEN                      00003FEF
+_WRT_ALL                          00003FFC
+_WRT_BOOT                         00003FFE
+_WRT_HALF                         00003FFD
+_WRT_OFF                          00003FFF
+__16LF1789                        00000001
+
+Errors   :     0
+Warnings :     0 reported,     0 suppressed
+Messages :    92 reported,     0 suppressed
+
+
